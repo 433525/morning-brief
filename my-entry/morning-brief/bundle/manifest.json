@@ -1,0 +1,22 @@
+{
+  "capabilities": [
+    "storage",
+    "net",
+    "images",
+    "web",
+    "llm"
+  ],
+  "id": "morning-brief",
+  "integrity": {
+    "bundle_blake3": "6483a9e11d72a8f2ce0daab892b03a9d4a64cc228c1deedb42592529f7205530"
+  },
+  "name": "Morning Brief",
+  "network": {
+    "hosts": [
+      "hn.algolia.com",
+      "www.techmeme.com"
+    ]
+  },
+  "schema": 1,
+  "version": "0.1.0"
+}

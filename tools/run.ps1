@@ -1,0 +1,7 @@
+﻿$env:OCTO_HUB='C:\rustbuild\octosense-hub\x86_64-pc-windows-gnu\release\hub.exe'
+$env:OCTO_CARD_HOST='C:\rustbuild\octosense-hub\release\card-host.exe'
+$env:OCTOSENSE_APP_HUB='C:\Users\Admin（无密码）\Desktop\数据文件\黑客松比赛项目\OctoSense-App-Hub'
+$env:PYTHONIOENCODING='utf-8'
+$env:PYTHONUTF8='1'
+Set-Location 'C:\Users\Admin（无密码）\Desktop\数据文件\黑客松比赛项目'
+python -u 'OctoScript-App-Design-Flow\tools\octo' run 'my-entry\morning-brief\bundle' --port 8136 --timeout 120 --detach --app-data 'C:\rustbuild\brief-v2-state'

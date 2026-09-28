@@ -1,0 +1,34 @@
+# 两个独立克隆的官方仓库（各自有 .git，不纳入本仓库）
+OctoScript-App-Design-Flow/
+Octoscript-AppCard/
+OctoSense-AppCard/
+OctoSense-App-Hub/
+OctoSense-System-Apps/
+OctoSense-Desktop/
+OctoSense/
+Octoscript-Makepad/
+Octoscript/
+octosense-rom/
+OctoSense-App-Hub/
+hackathon-agenticapp26/
+hagency/
+octos/
+octoscode/
+makepad/
+Rinx/
+tools-rust/
+
+# 本机临时产物
+_video_frames/
+*.log
+.octos/memory/
+.octos/sessions/
+
+# 运行期状态
+.local-state/
+*.pyc
+__pycache__/
+
+# 系统
+Thumbs.db
+desktop.ini

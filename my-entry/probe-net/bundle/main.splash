@@ -1,0 +1,50 @@
+let out = []
+let lbl = "init"
+
+fn mark(tag){
+    out.push(tag + " | lbl=" + lbl)
+    fs.write("probe-state.json", out.to_json())
+}
+
+fn setlbl(v){
+    lbl = v
+    ui.probe_label.set_text(lbl)
+}
+
+fn fetch(url){
+    let p = promise()
+    net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{
+        on_response: |res| p.resolve(res)
+        on_error: |_err| p.resolve(nil)
+    }
+    p
+}
+
+fn async_probe(){
+    setlbl("A-sync-set")
+    mark("A-after-sync-set")
+    let res = fetch("https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=2").await()
+    if res == nil { setlbl("B-nil") } else { setlbl("B-await-status-" + ("" + res.status_code)) }
+    mark("B-after-await-set")
+    ui.probe_list.render()
+    mark("C-after-render")
+    setlbl("D-final")
+    mark("D-after-final-set")
+}
+
+fn boot(){
+    mark("boot")
+    start_timeout(0.4, || async_probe())
+}
+start_timeout(0.05, || boot())
+
+let ink = #x1c1c1e
+let secondary = #x8e8e93
+SolidView{width: Fill height: Fill flow: Down padding: 12 spacing: 8 draw_bg.color: #xffffff
+    Label{text: "probe v11 async-ui" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 16}}
+    probe_label := Label{width: Fill text: "" max_lines: 4 draw_text.color: ink draw_text.text_style.font_size: 13}
+    ButtonFlat{text: "click-sync" on_click: || setlbl("E-click-sync")}
+    probe_list := ScrollYView{width: Fill height: Fill flow: Down spacing: 2 on_render: || {
+        for l in out { Label{width: Fill text: l max_lines: 6 draw_text.color: secondary draw_text.text_style.font_size: 11} }
+    }}
+}

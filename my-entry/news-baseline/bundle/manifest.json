@@ -1,0 +1,22 @@
+{
+  "capabilities": [
+    "storage",
+    "net",
+    "images",
+    "web"
+  ],
+  "id": "news-baseline",
+  "integrity": {
+    "bundle_blake3": "d9c00cd19c0db10b3f2eb03485a70fcddfc71607a1bc686d47656e5460629ab2"
+  },
+  "name": "News",
+  "network": {
+    "hosts": [
+      "hn.algolia.com",
+      "www.techmeme.com",
+      "news.google.com"
+    ]
+  },
+  "schema": 1,
+  "version": "1.0.0"
+}

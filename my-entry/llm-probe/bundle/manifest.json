@@ -1,0 +1,19 @@
+{
+  "capabilities": [
+    "llm",
+    "net",
+    "storage"
+  ],
+  "id": "llm-probe",
+  "integrity": {
+    "bundle_blake3": "9100e556036a547c6bd484923546906384549318cd8d5fce63d3983e431c1247"
+  },
+  "name": "LLM Probe",
+  "network": {
+    "hosts": [
+      "hn.algolia.com"
+    ]
+  },
+  "schema": 1,
+  "version": "0.1.0"
+}

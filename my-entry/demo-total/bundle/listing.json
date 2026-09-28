@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "subtitle": "一句话意图，生成一份可核验的科技晨报",
+  "description": "晨报卡把「看新闻」变成一次带授权的 Agent 任务。你给出主题与条数上限，Agent 先输出取数计划（访问哪些来源、筛什么主题、怎么排序），你批准后才真正联网取数，随后给出可逐条核验的结果：生成时间、筛选主题、各来源抓到多少条、最终命中多少条。拒绝授权则不产生任何网络请求；部分来源失败时只展示成功来源的结果并列出失败项，绝不补齐条数；全部失败时保留上次成功结果并标注已过期；筛选零命中会明确说明这是筛选结果而非获取失败。数据只来自 Hacker News（Algolia API）与 TechMeme 公开 feed，不做正文改写与摘要生成，标题与来源均原样呈现。",
+  "category": "news",
+  "keywords": ["news", "brief", "agent", "hackernews", "techmeme", "authorization"],
+  "screenshots": ["screenshots/01-intent.png", "screenshots/02-plan.png", "screenshots/03-done.png"],
+  "icon": "assets/icon.svg",
+  "platforms": ["windows", "linux", "macos", "android"],
+  "publisher": {
+    "name": "共创 (Gongchuang) — 小鞠老师",
+    "support": "https://github.com/jscjscjscjscjsc",
+    "privacy_policy_url": "https://github.com/gosimfoundation/hackathon-agenticapp26/issues/5"
+  },
+  "release_notes": "First version: intent, plan, authorization, execution, verification and failure states.",
+  "age_rating": "all",
+  "license": "Apache-2.0"
+}

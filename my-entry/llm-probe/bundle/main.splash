@@ -1,0 +1,88 @@
+// llm-probe v2: fetch real headlines, ask the host's AI to judge them.
+let lines = []
+let rows = []
+
+fn say(t){
+    lines.push(t)
+    ui.log.render()
+}
+
+fn fetch(url){
+    let p = promise()
+    net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{
+        on_response: |res| p.resolve(res)
+        on_error: |_err| p.resolve(nil)
+    }
+    p
+}
+
+fn load(){
+    let res = fetch("https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=8").await()
+    if res == nil || res.body == nil {
+        say("fetch failed")
+        return
+    }
+    let data = res.body.to_string().parse_json()
+    if data == nil || data.hits == nil { say("no hits"); return }
+    for hit in data.hits {
+        if hit.title != nil {
+            rows.push({title: hit.title source: "HN"})
+        }
+    }
+    say("fetched " + rows.len() + " rows")
+}
+
+fn ask(){
+    let candidate = ""
+    let i = 0
+    for r in rows {
+        candidate = candidate + i + ". [" + r.source + "] " + r.title + "\n"
+        i = i + 1
+    }
+    let schema = {type: "object" required: ["intro" "picks"] properties: {intro: {type: "string"} picks: {type: "array" minItems: 1 items: {type: "object" required: ["i" "why"] properties: {i: {type: "integer"} why: {type: "string"}}}}}
+    say("asking AI to pick 3 of " + rows.len())
+    host.request("llm.chat", {
+        system: "你是科技晨报的主编，判断克制、说明具体，不夸张。只返回 JSON。"
+        prompt: "下面是今天的候选科技新闻：\n" + candidate + "\n请挑出最值得读的 3 条，按重要性排序。intro 用一句话概括今天的整体看点（40 字以内）；每条给一句入选理由（20 字以内）。"
+        as_json: true
+        schema: schema
+        max_tokens: 1200
+        label: "probe.judge"
+    }, fn(r){
+        if r.is_ok {
+            say("ai ok: " + r.data.model + "  " + r.data.elapsed_ms + "ms  tokens=" + r.data.usage.total_tokens)
+            if r.data.reasoning != "" { say("thinking: " + r.data.reasoning) }
+            say("intro: " + r.data.data.intro)
+            for pk in r.data.data.picks {
+                say("pick #" + pk.i + "  why: " + pk.why)
+            }
+        } else {
+            say("ai failed: " + r.error)
+        }
+        ui.head.set_text("probe done")
+        ui.log.render()
+    })
+}
+
+fn run(){
+    load()
+    if rows.len() > 0 { ask() } else { say("nothing fetched") }
+}
+start_timeout(0.4, || run())
+
+let ink = #x1c1c1e
+let secondary = #x8e8e93
+
+HostedView{width: Fill height: Fill
+    full: View{width: Fill height: Fill flow: Down padding: 14 spacing: 8 show_bg: true draw_bg.color: #xffffff
+        head := Label{width: Fill text: "probe v2" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 16}}
+        log := ScrollYView{width: Fill height: Fill flow: Down spacing: 6 on_render: || {
+            for l in lines {
+                Label{width: Fill text: l max_lines: 12 draw_text.color: secondary draw_text.text_style.font_size: 12}
+            }
+        }}
+    }
+    tile: View{width: Fill height: Fill padding: 12 show_bg: true draw_bg.color: #xffffff
+        Label{text: "llm probe v2" draw_text.color: ink draw_text.text_style.font_size: 12}
+    }
+}

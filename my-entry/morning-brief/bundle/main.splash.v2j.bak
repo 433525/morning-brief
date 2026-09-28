@@ -1,0 +1,719 @@
+// 晨报卡 v2 — AI 主编
+// 官方技术栈：OctoSense App Hub 的 card-host + splash 脚本 + 宿主大模型服务（llm）
+// 说明：新闻只来自公开来源；标题原样呈现；是否让 AI 参与由用户在计划页批准。
+
+let sources = [
+    {id: "hn" label: "Hacker News" host: "hn.algolia.com" note: "首页热榜 30 条" kind: "hn" url: "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30"}
+    {id: "techmeme" label: "TechMeme" host: "www.techmeme.com" note: "最新条目" kind: "digest" url: "https://www.techmeme.com/feed.xml"}
+]
+let topics = [
+    {id: "ai" label: "AI" en: "(\\W|^)(AI|GPT|LLM|OpenAI|Anthropic|DeepMind|Gemini|Claude)(\\W|$)" zh: "人工智能|大模型|机器学习"}
+    {id: "oss" label: "开源" en: "(\\W|^)(open source|opensource|Linux|kernel|GitHub|Apache)(\\W|$)" zh: "开源"}
+    {id: "sec" label: "安全" en: "(\\W|^)(security|vulnerability|breach|malware|ransomware|exploit|CVE)(\\W|$)" zh: "安全|漏洞"}
+    {id: "chip" label: "芯片" en: "(\\W|^)(chip|chips|semiconductor|GPU|silicon|TSMC|Nvidia|wafer)(\\W|$)" zh: "芯片|半导体"}
+]
+let chosen = {ai: true oss: true sec: false chip: false}
+let limit = 10
+let pool = 16
+let phase = "intent"
+let ask = ""
+let failed = []
+let picked = []
+let ok_sources = []
+let all_rows = []
+let cand = []
+let finished_at = 0
+let last_rows = []
+let last_at = 0
+let busy = false
+let ai_ready = -1
+let ai_on = false
+let ai_state = ""
+let ai_intro = ""
+let ai_note = ""
+let ai_model = ""
+let ai_ms = 0
+let ai_tokens = 0
+let ai_think = ""
+let ai_whys = []
+let cand_n = 0
+let months = ["January" "February" "March" "April" "May" "June" "July" "August" "September" "October" "November" "December"]
+let days = ["Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday"]
+
+fn fetch(url){
+    let p = promise()
+    net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{
+        on_response: |res| p.resolve(res)
+        on_error: |_err| p.resolve(nil)
+    }
+    p
+}
+
+fn hn_rows(body){
+    let out = []
+    let data = body.parse_json()
+    if data == nil || data.hits == nil { return out }
+    for hit in data.hits {
+        if hit.title == nil || hit.title == "" { continue }
+        let discussion = "https://news.ycombinator.com/item?id=" + hit.objectID
+        let link = discussion
+        if hit.url != nil && hit.url != "" { link = hit.url }
+        let published = 0
+        if hit.created_at_i != nil { published = hit.created_at_i }
+        out.push({id: "hn-" + hit.objectID title: hit.title link: link source: "Hacker News" published: published})
+    }
+    out
+}
+
+fn feed_rows(body, s){
+    let items = body.parse_feed(s.kind)
+    if items == nil { return nil }
+    let out = []
+    for i it in items {
+        if it.title == nil || it.title == "" { continue }
+        let source = it.source
+        if source == "" { source = s.label }
+        let published = 0
+        if it.published != nil { published = it.published }
+        out.push({id: s.id + "-" + i title: it.title link: it.link source: source published: published})
+    }
+    out
+}
+
+fn load_source(s){
+    let res = fetch(s.url).await()
+    if res == nil || res.status_code >= 400 || res.body == nil {
+        failed.push(s.label)
+        return
+    }
+    let body = res.body.to_string()
+    let rows = nil
+    if s.kind == "hn" { rows = hn_rows(body) } else { rows = feed_rows(body, s) }
+    if rows == nil || rows.len() == 0 {
+        failed.push(s.label)
+        return
+    }
+    ok_sources.push({label: s.label n: rows.len()})
+    for r in rows { all_rows.push(r) }
+}
+
+fn topic_hit(t, title){
+    if regex(t.en, "i").test(title) { return true }
+    regex(t.zh, "i").test(title)
+}
+
+fn topic_on(id){
+    if id == "ai" { return chosen["ai"] }
+    if id == "oss" { return chosen["oss"] }
+    if id == "sec" { return chosen["sec"] }
+    chosen["chip"]
+}
+
+fn row_hit(title){
+    let n = 0
+    for t in topics { if topic_on(t.id) { n = n + 1 } }
+    if n == 0 { return true }
+    for t in topics {
+        if topic_on(t.id) && topic_hit(t, title) { return true }
+    }
+    false
+}
+
+fn sort_desc(rows){
+    let out = []
+    for r in rows {
+        let placed = false
+        let next = []
+        for o in out {
+            if !placed && r.published > o.published {
+                next.push(r)
+                placed = true
+            }
+            next.push(o)
+        }
+        if !placed { next.push(r) }
+        out = next
+    }
+    out
+}
+
+fn already(rows, id){
+    for r in rows { if r.id == id { return true } }
+    false
+}
+
+fn reason_of(id){
+    for w in ai_whys { if w.id == id { return w.why } }
+    ""
+}
+
+fn pad2(n){
+    if n < 10 { return "0" + n }
+    "" + n
+}
+
+fn gen_time(){
+    if finished_at <= 0 { return "尚未生成" }
+    let t = local_time(time_now() + 28800)
+    days[t.weekday] + " " + months[t.month - 1] + " " + t.day + "  " + pad2(t.hour) + ":" + pad2(t.minute)
+}
+
+fn today_text(){
+    let t = local_time(time_now() + 28800)
+    months[t.month - 1] + " " + t.day
+}
+
+fn ago(secs){
+    if secs == nil || secs <= 0 { return "" }
+    let d = time_now() - secs
+    if d < 60 { return "just now" }
+    if d < 3600 { return "" + floor(d / 60) + "m ago" }
+    if d < 86400 { return "" + floor(d / 3600) + "h ago" }
+    "" + floor(d / 86400) + "d ago"
+}
+
+fn row_meta(r){
+    let line = r.source
+    let a = ago(r.published)
+    if a != "" { line = line + "  ·  " + a }
+    line
+}
+
+fn seconds_text(ms){
+    if ms <= 0 { return "" }
+    "" + (floor(ms / 100) / 10) + " 秒"
+}
+
+fn topics_line(){
+    let out = ""
+    for t in topics {
+        if topic_on(t.id) {
+            if out != "" { out = out + "、" }
+            out = out + t.label
+        }
+    }
+    if out == "" { return "未选主题（全部放行）" }
+    out
+}
+
+fn hosts_line(){
+    let out = ""
+    for s in sources {
+        if out != "" { out = out + "、" }
+        out = out + s.host
+    }
+    out
+}
+
+fn sources_line(){
+    if ok_sources.len() == 0 { return "无" }
+    let out = ""
+    for s in ok_sources {
+        if out != "" { out = out + " · " }
+        out = out + s.label + " " + s.n + " 条"
+    }
+    out
+}
+
+fn chip_label(id){
+    let label = id
+    for t in topics { if t.id == id { label = t.label } }
+    if topic_on(id) { return "[x] " + label }
+    "[ ] " + label
+}
+
+fn intent_preview(){
+    if ask != "" { return "意图：" + ask }
+    "意图：只要 " + topics_line() + " 相关，" + limit + " 条以内"
+}
+
+fn ai_line(){
+    if ai_ready == -1 { return "正在检查 AI 主编…" }
+    if ai_ready == 0 { return "没接上 AI（这台机器没有配置模型钥匙）。仍可按主题筛选。" }
+    "已接上「" + ai_model + "」，可由它挑选重点。"
+}
+
+fn ai_sum_line(){
+    if phase == "fetching" { return "正在取数 · 官方 net 能力" }
+    if ai_on { return "AI 主编 · " + ai_model + " · 用时 " + seconds_text(ai_ms) + " · " + ai_tokens + " tokens" }
+    if ai_state == "failed" { return "离线模式：AI 主编没有答复，已按你勾选的主题做规则筛选" }
+    "离线模式：没有调用 AI，按你勾选的主题做规则筛选"
+}
+
+fn ai_note_line(){
+    if ai_note != "" { return ai_note }
+    ""
+}
+
+fn src_line(){
+    "取用 " + sources_line() + " · 上限 " + limit + " 条"
+}
+
+fn pipe_text(){
+    if phase == "fetching" { return "官方能力 · 取数 net.http_request · 正在跑" + "\n" + "接下来交给 AI 主编（llm.chat）挑选重点" }
+    let l1 = "官方能力 · 取数 net.http_request · 候选 " + cand_n + " 条"
+    let l2 = "官方能力 · 主编 llm.chat · 选 " + picked.len() + " 条 · 落地 fs.write"
+    if !ai_on { l2 = "官方能力 · 规则兜底筛选 · 选 " + picked.len() + " 条 · 落地 fs.write" }
+    l1 + "\n" + l2
+}
+
+fn judge_line(){
+    "AI 主编正在阅读 " + cand_n + " 条候选标题，挑选重点并写理由…"
+}
+
+fn plan_text(){
+    let out = "操作计划\n"
+    for s in sources { out = out + "  · " + s.label + " — " + s.note + "\n" }
+    out + "候选范围：按发布时间取最近 " + pool + " 条\n" + "判断方式：" + plan_way() + "\n" + "排序：由 AI 主编按重要性排序（离线时按发布时间）"
+}
+
+fn plan_way(){
+    if ai_ready == 0 { return "规则筛选（AI 主编不可用）" }
+    "AI 主编挑选 + 规则兜底"
+}
+
+fn ask_text(){
+    if ai_ready == 0 { return "点「暂不」就什么都不会发生。" }
+    "点「暂不」就什么都不会发生。"
+}
+
+fn status_line(){
+    if phase == "fetching" { return "正在获取 " + sources.len() + " 个来源…" }
+    if phase == "judging" { return "AI 主编正在判断…" }
+    if phase == "done" {
+        if failed.len() == 0 { return "已完成。" }
+        if failed.len() < sources.len() { return "部分完成。" }
+        return "未能获取任何来源。"
+    }
+    ""
+}
+
+fn fail_line(){
+    if failed.len() == 0 { return "" }
+    let out = "失败来源："
+    for f in failed {
+        if out != "失败来源：" { out = out + "、" }
+        out = out + f
+    }
+    if failed.len() == sources.len() { return out + "（全部失败）" }
+    out + "（其余来源结果如下，条数未补齐）"
+}
+
+fn empty_line(){
+    if phase == "fetching" { return "正在获取…" }
+    if phase == "judging" { return "AI 主编正在判断…" }
+    if failed.len() == sources.len() { return "无法获取任何来源。" }
+    if ai_on && picked.len() == 0 { return "AI 主编认为今天没有值得进入晨报的条目 — 这是判断结果，不是获取失败。" }
+    "未找到符合「" + topics_line() + "」的条目 — 这是筛选结果，不是获取失败。"
+}
+
+fn stale_line(){
+    if failed.len() == sources.len() && last_rows.len() > 0 { return "以下为上次成功结果，" + ago(last_at) + "，已过期" }
+    ""
+}
+
+fn show_rows(){
+    if picked.len() > 0 { return picked }
+    if failed.len() == sources.len() && last_rows.len() > 0 { return last_rows }
+    []
+}
+
+fn pick_row(r){
+    ui.sel_line.set_text("已选中（id " + r.id + "）：" + r.title)
+}
+
+fn fallback_pick(){
+    let hits = []
+    for r in all_rows { if row_hit(r.title) { hits.push(r) } }
+    hits = sort_desc(hits)
+    picked = []
+    let n = 0
+    for r in hits {
+        if n < limit { picked.push(r) n = n + 1 }
+    }
+}
+
+fn picks_from_ai(list){
+    picked = []
+    ai_whys = []
+    for pk in list {
+        let idx = pk.i
+        if idx >= 0 && idx < cand.len() {
+            let r = cand[idx]
+            if !already(picked, r.id) {
+                picked.push(r)
+                ai_whys.push({id: r.id why: pk.why})
+            }
+        }
+    }
+}
+
+let pick_shape = {type: "object" required: ["i" "why"] properties: {i: {type: "integer"} why: {type: "string"}}}
+let brief_shape = {type: "object" required: ["intro" "picks"] properties: {intro: {type: "string"} picks: {type: "array" items: pick_shape}}}
+
+fn judge(){
+    judge_try(cand.len())
+}
+
+fn judge_try(n){
+    ai_state = "asking"
+    let list = ""
+    let i = 0
+    for r in cand {
+        if i < n { list = list + "" + i + ". " + r.title + "\n" }
+        i = i + 1
+    }
+    let focus = ask
+    if focus == "" { focus = topics_line() }
+    if focus == "未选主题（全都要）" { focus = "没有特别偏好，挑最重要的科技新闻" }
+    let ask_text_full = "今天是 " + today_text() + "。\n读者的关注点：" + focus + "\n\n候选标题（序号从 0 开始）\n" + list + "\n从候选里挑出最多 " + limit + " 条最值得进入晨报的科技项目，按重要性从高到低排序，为每条写一句中文入选理由。直接输出 JSON，不要思考过程。"
+    host.request("llm.chat", {
+        system: "你是一位科技新闻主编。直接输出一个 JSON 对象，第一个字符就是 {，不要输出任何推理过程或思考。不要啰嗦，不要加围栏。JSON 结构：intro 是导语（字符串），picks 是数组，每项含 i（候选序号，整数）和 why（入选理由，字符串）。"
+        prompt: ask_text_full
+        as_json: true
+        temperature: 0
+        max_tokens: 2048
+        schema: brief_shape
+        label: "brief.judge"
+    }, fn(r){
+        let ok_data = false
+        if r.is_ok && r.data != nil && r.data.data != nil && r.data.data.picks != nil { ok_data = true }
+        if ok_data {
+            ai_on = true
+            ai_state = "ok"
+            ai_intro = r.data.data.intro
+            ai_model = r.data.model
+            ai_ms = r.data.elapsed_ms
+            ai_tokens = r.data.usage.total_tokens
+            if r.data.reasoning != "" { ai_think = r.data.reasoning }
+            picks_from_ai(r.data.data.picks)
+            if picked.len() > 0 {
+                ai_note = "AI 主编审阅了 " + cand_n + " 条候选，选出 " + picked.len() + " 条。"
+            } else {
+                ai_note = "AI 主编没有挑中任何一条，已按主题规则兜底挑选。"
+                fallback_pick()
+            }
+            finish()
+        } else {
+            let why = "没有可用的答复"
+            if r.error != nil && r.error != "" { why = r.error }
+            if n > 8 {
+                ai_note = "第一次没拿到可用结果，已自动换更短的名单再试一次。"
+                sync_ui()
+                judge_try(8)
+            } else {
+                ai_on = false
+                ai_state = "failed"
+                ai_note = "AI 主编这次没有答复，已改用规则筛选。原因：" + why + "。"
+                fallback_pick()
+                finish()
+            }
+        }
+    })
+}
+
+fn gather(){
+    all_rows = []
+    ok_sources = []
+    failed = []
+    for s in sources { load_source(s) }
+    let sorted = sort_desc(all_rows)
+    cand = []
+    let n = 0
+    for r in sorted {
+        if n < pool { cand.push(r) n = n + 1 }
+    }
+    cand_n = cand.len()
+}
+
+fn run_brief(){
+    if busy { return }
+    busy = true
+    gather()
+    if ai_ready == 1 {
+        phase = "judging"
+        sync_ui()
+        judge()
+    } else {
+        fallback_pick()
+        finish()
+    }
+}
+
+fn finish(){
+    finished_at = time_now()
+    if picked.len() > 0 {
+        fs.write("last_brief.json", {ts: finished_at rows: picked intro: ai_intro whys: ai_whys}.to_json())
+        last_rows = picked
+        last_at = finished_at
+    } else if failed.len() < sources.len() {
+        fs.write("last_brief.json", {ts: finished_at rows: []}.to_json())
+        last_rows = []
+        last_at = finished_at
+    }
+    phase = "done"
+    busy = false
+    sync_ui()
+}
+
+fn load_last(){
+    if fs.exists("last_brief.json") {
+        let v = fs.read("last_brief.json").parse_json()
+        if v != nil && v.rows != nil {
+            last_rows = v.rows
+            last_at = v.ts
+        }
+    }
+}
+
+fn make_plan(){
+    phase = "plan"
+    sync_ui()
+    host.request("llm.status", {}, fn(r){
+        if r.is_ok && r.data.ready {
+            ai_ready = 1
+            ai_model = r.data.model
+        } else {
+            ai_ready = 0
+        }
+        sync_ui()
+    })
+}
+
+fn approve(){
+    phase = "fetching"
+    picked = []
+    ai_on = false
+    ai_state = ""
+    ai_intro = ""
+    ai_note = ""
+    ai_think = ""
+    cand_n = 0
+    sync_ui()
+    start_timeout(0.05, || run_brief())
+}
+
+fn deny(){
+    phase = "denied"
+    sync_ui()
+}
+
+fn restart(){
+    phase = "intent"
+    picked = []
+    failed = []
+    ok_sources = []
+    all_rows = []
+    cand = []
+    cand_n = 0
+    ai_on = false
+    ai_state = ""
+    ai_intro = ""
+    ai_note = ""
+    ai_think = ""
+    ai_whys = []
+    sync_ui()
+}
+
+fn set_ask(t){
+    ask = t
+    ui.intent_line.set_text(intent_preview())
+}
+
+fn toggle_topic(id){
+    if id == "ai" { if chosen["ai"] { chosen["ai"] = false } else { chosen["ai"] = true } }
+    else if id == "oss" { if chosen["oss"] { chosen["oss"] = false } else { chosen["oss"] = true } }
+    else if id == "sec" { if chosen["sec"] { chosen["sec"] = false } else { chosen["sec"] = true } }
+    else { if chosen["chip"] { chosen["chip"] = false } else { chosen["chip"] = true } }
+    sync_ui()
+}
+
+fn bump(d){
+    limit = limit + d
+    if limit < 3 { limit = 3 }
+    if limit > 30 { limit = 30 }
+    sync_ui()
+}
+
+fn sync_ui(){
+    ui.date.set_text(gen_time())
+    ui.intent_line.set_text(intent_preview())
+    ui.chip_ai.set_text(chip_label("ai"))
+    ui.chip_oss.set_text(chip_label("oss"))
+    ui.chip_sec.set_text(chip_label("sec"))
+    ui.chip_chip.set_text(chip_label("chip"))
+    ui.limit_label.set_text("" + limit)
+    ui.browse.set_visible(phase == "intent" || phase == "plan" || phase == "judging" || phase == "denied")
+    ui.gen_pane.set_visible(phase == "intent")
+    ui.plan_pane.set_visible(phase == "plan")
+    ui.judge_pane.set_visible(phase == "judging")
+    ui.run_pane.set_visible(phase == "fetching" || phase == "done")
+    ui.deny_pane.set_visible(phase == "denied")
+    ui.plan_topics.set_text(plan_text())
+    ui.plan_limit.set_text("条数上限：" + limit + " 条")
+    ui.plan_hosts.set_text("将发起网络请求的域名：" + hosts_line())
+    ui.plan_ai.set_text(ai_line())
+    ui.plan_ask.set_text(ask_text())
+    ui.judge_line.set_text(judge_line())
+    ui.status_line.set_text(status_line())
+    ui.fail_line.set_text(fail_line())
+    ui.fail_line.set_visible(fail_line() != "")
+    ui.st_gen.set_text(gen_time())
+    ui.st_src.set_text(src_line())
+    ui.ai_sum.set_text(ai_sum_line())
+    ui.ai_sum.set_visible(phase == "done")
+    ui.ai_intro.set_text(ai_intro)
+    ui.ai_intro.set_visible(ai_intro != "")
+    ui.ai_note.set_text(ai_note_line())
+    ui.ai_note.set_visible(ai_note_line() != "")
+    ui.pipe_line.set_text(pipe_text())
+    ui.stale_line.set_text(stale_line())
+    ui.stale_line.set_visible(stale_line() != "")
+    ui.list.render()
+}
+
+fn boot(){
+    load_last()
+    sync_ui()
+}
+start_timeout(0.05, || boot())
+
+let ink = #x1c1c1e
+let secondary = #x8e8e93
+let accent = #xe0245e
+let ground = #xf2f2f7
+
+let ChipBtn = ButtonFlat{height: 32 padding: Inset{left: 12 right: 12}
+    draw_bg +: {border_radius: 16.0 color: #xffffff color_hover: #xf0f0f5 color_down: #xe5e5ea border_size: 1.0
+        border_color: #xd8d8de border_color_hover: #xd8d8de border_color_down: #xd8d8de}
+    draw_text +: {color: ink color_hover: ink color_down: ink text_style +: {font_size: 13}}
+}
+let NumBtn = ButtonFlat{height: 30 padding: Inset{left: 12 right: 12}
+    draw_bg +: {border_radius: 15.0 color: #xffffff color_hover: #xf0f0f5 color_down: #xe5e5ea border_size: 1.0
+        border_color: #xd8d8de border_color_hover: #xd8d8de border_color_down: #xd8d8de}
+    draw_text +: {color: ink color_hover: ink color_down: ink text_style +: {font_size: 15}}
+}
+let PrimaryBtn = ButtonFlat{height: 42 padding: Inset{left: 18 right: 18}
+    draw_bg +: {border_radius: 10.0 color: accent color_hover: #xc81e52 color_down: #ab1a46 border_size: 0.0}
+    draw_text +: {color: #xffffff color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 15}}
+}
+let GhostBtn = ButtonFlat{height: 42 padding: Inset{left: 18 right: 18}
+    draw_bg +: {border_radius: 10.0 color: #x00000000 color_hover: #x0000000a color_down: #x00000014 border_size: 1.0
+        border_color: #xc8c8d0 border_color_hover: #c8c8d0 border_color_down: #c8c8d0}
+    draw_text +: {color: #x3a3a3c color_hover: #x3a3a3c color_down: #x3a3a3c text_style +: {font_size: 15}}
+}
+let RowCard = RoundedView{width: Fill height: Fit flow: Down spacing: 3
+    padding: Inset{top: 10 bottom: 10 left: 12 right: 12}
+    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0
+    rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: secondary draw_text.text_style.font_size: 10}
+    rt := Label{width: Fill text: "" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
+    rw := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: accent draw_text.text_style.font_size: 11}
+}
+
+HostedView{width: Fill height: Fill
+    full: View{width: Fill height: Fill flow: Overlay show_bg: true draw_bg.color: ground
+        browse := ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 top: 14 bottom: 28}
+            View{width: Fill height: Fit flow: Down spacing: 2
+                date := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style: theme.font_bold{font_size: 11}}
+                Label{width: Fill text: "晨报卡" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 28}}
+            }
+            intent_line := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+            ask_in := TextInput{width: Fill height: 40 empty_text: "也可以直接写，例如：我想看芯片和 AI 的大新闻"
+                on_change: |text| set_ask(text)
+                draw_bg +: {color: #xffffff color_hover: #xffffff color_focus: #xffffff color_empty: #xffffff
+                    border_color: #xd8d8de border_color_hover: #xd8d8de border_color_focus: #xe0245e border_color_empty: #xd8d8de
+                    border_radius: 10.0}
+                draw_text +: {color: ink color_hover: ink color_focus: ink color_empty: secondary color_empty_hover: secondary}
+            }
+            View{width: Fill height: Fit flow: Right spacing: 6
+                chip_ai := ChipBtn{text: "AI" on_click: || toggle_topic("ai")}
+                chip_oss := ChipBtn{text: "开源" on_click: || toggle_topic("oss")}
+                chip_sec := ChipBtn{text: "安全" on_click: || toggle_topic("sec")}
+                chip_chip := ChipBtn{text: "芯片" on_click: || toggle_topic("chip")}
+            }
+            View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                Label{text: "条数上限" draw_text.color: secondary draw_text.text_style.font_size: 12}
+                NumBtn{text: "-" on_click: || bump(-1)}
+                limit_label := Label{text: "10" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 15}}
+                NumBtn{text: "+" on_click: || bump(1)}
+            }
+            gen_pane := View{width: Fill height: 44 align: Align{x: 0.0 y: 0.5}
+                PrimaryBtn{text: "生成晨报" on_click: || make_plan()}
+            }
+            plan_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 8
+                new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
+                padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                Label{width: Fill text: "待批准的 Agent 计划" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 12}}
+                plan_topics := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+                plan_limit := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+                plan_hosts := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+                plan_ai := Label{width: Fill text: "" draw_text.color: #x1c1c1e draw_text.text_style: theme.font_bold{font_size: 12}}
+                plan_ask := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
+                View{width: Fill height: 44 flow: Right spacing: 8 align: Align{y: 0.5}
+                    PrimaryBtn{text: "批准并取数" on_click: || approve()}
+                    GhostBtn{text: "暂不" on_click: || deny()}
+                }
+            }
+            judge_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 6
+                new_batch: true show_bg: true draw_bg.color: #xfff6e5 draw_bg.border_radius: 12.0
+                padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                judge_line := Label{width: Fill text: "" draw_text.color: #xb26a00 draw_text.text_style: theme.font_bold{font_size: 13}}
+                Label{width: Fill text: "这一步在后台进行，卡片不会卡住；判断完成后结果会自动出现。" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
+            }
+            deny_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 8
+                new_batch: true show_bg: true draw_bg.color: #xfff6e5 draw_bg.border_radius: 12.0
+                padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                Label{width: Fill text: "已取消 — 未发起任何网络请求。" draw_text.color: #xb26a00 draw_text.text_style: theme.font_bold{font_size: 13}}
+                Label{width: Fill text: "你的授权是取数的前提；拒绝后不会读取任何来源。" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
+                View{width: Fill height: 44 flow: Right align: Align{y: 0.5}
+                    GhostBtn{text: "重新开始" on_click: || restart()}
+                }
+            }
+        }
+        run_pane := View{visible: false width: Fill height: Fill flow: Down
+            new_batch: true show_bg: true draw_bg.color: ground
+            View{width: Fill height: Fit flow: Down spacing: 4 padding: Inset{left: 14 right: 14 top: 10 bottom: 6}
+                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                    status_line := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 16}}
+                    st_gen := Label{text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                }
+                fail_line := Label{visible: false width: Fill text: "" draw_text.color: #xc0392b draw_text.text_style.font_size: 11}
+                ai_sum := Label{visible: false width: Fill text: "" draw_text.color: #x5b3ea8 draw_text.text_style: theme.font_bold{font_size: 11}}
+                ai_intro := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 13}}
+                ai_note := Label{visible: false width: Fill text: "" draw_text.color: #x6b6b70 draw_text.text_style.font_size: 10}
+                View{width: Fill height: Fit flow: Down spacing: 3
+                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0
+                    padding: Inset{top: 8 bottom: 8 left: 10 right: 10}
+                    pipe_line := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 10}
+                    st_src := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                }
+                stale_line := Label{visible: false width: Fill text: "" draw_text.color: #xb26a00 draw_text.text_style.font_size: 11}
+            }
+            list := ScrollYView{width: Fill height: Fill flow: Down spacing: 8 padding: Inset{left: 14 right: 14 bottom: 12}
+                on_render: || {
+                    if show_rows().len() == 0 {
+                        View{width: Fill height: 120 align: Align{x: 0.5 y: 0.5}
+                            Label{text: empty_line() draw_text.color: secondary draw_text.text_style.font_size: 12}
+                        }
+                    }
+                    else for r in show_rows() {
+                        GestureView{width: Fill height: Fit on_tap: |x, y| pick_row(r)
+                            RowCard{rm.text: row_meta(r) rt.text: r.title rw.text: reason_of(r.id) rw.visible: reason_of(r.id) != ""}
+                        }
+                    }
+                }
+            }
+            View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 14 right: 14 bottom: 12}
+                sel_line := Label{width: Fill text: "点任意条目可在核对后复制到剪贴板" draw_text.color: secondary draw_text.text_style.font_size: 11}
+                View{width: Fill height: 44 flow: Right align: Align{y: 0.5}
+                    GhostBtn{text: "重新开始" on_click: || restart()}
+                }
+            }
+        }
+    }
+    tile: View{width: Fill height: Fill flow: Down padding: Inset{left: 14 right: 14 top: 12 bottom: 12} spacing: 6
+        new_batch: true show_bg: true draw_bg.color: #xffffff
+        Label{text: "晨报卡" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 13}}
+        Label{width: Fill text: "一句话意图，生成一份可核验的晨报。" max_lines: 3 draw_text.color: ink draw_text.text_style.font_size: 12}
+    }
+}

@@ -1,0 +1,33 @@
+Binary & version
+[✓] octoscode binary — v0.3.0
+[✓] install method — npm (global)
+[✓] octoscode on PATH — resolvable by name
+[✓] no shadowing installs — exactly one (on PATH)
+[✓] up to date — v0.3.0 is current
+
+Installations
+[✓] octoscode needs octos — >= 1.1.0 (this is octoscode v0.3.0; auto-install bundle v2.0.3-rc.1)
+[✓] octoscode installs — C:\Users\Admin（无密码）\.local\bin\octoscode.exe [unknown, on PATH] → octoscode 0.3.0 (8c88f65 2026-08-07)
+[✓] octos installs — C:\Users\Admin（无密码）\.octos\bin\octos.exe [unknown, on PATH] → octos 2.0.2 (b074918 2026-07-23)
+
+Terminal environment
+[✓] TERM set — xterm-256color
+[✓] UTF-8 locale — C.UTF-8
+[✓] CJK width — uses unicode-width for double-width glyphs (also depends on terminal font)
+[✓] color support — 256-color
+
+Config & data
+[✓] octos data dir — present and writable
+
+Profiles & sessions
+[!] profiles — no profiles found
+    → fix: run onboarding (launch octoscode in a folder) — expected under C:\Users\Admin（无密码）\.octos\profiles
+
+Backend
+[✓] stdio command — resolves to C:\Users\Admin（无密码）\.octos\bin\octos.exe (octos 2.0.2 (b074918 2026-07-23))
+[✓] protocol skew — TUI requires 11 features; all known in octos-ui/v1alpha1 (schema v1)
+
+Network
+[✓] GitHub reachable — api.github.com OK
+
+• Doctor summary: 16 passed, 1 warning(s). No fatal issues found.

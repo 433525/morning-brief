@@ -1,0 +1,59 @@
+Notes
+  ! provider — no LLM provider configured
+  ! config dir — C:\Users\Admin（无密码）\AppData\Roaming\octos does not exist yet
+
+Binary & version
+[✓] octos binary — v2.0.2
+[✓] install method — unknown / distro package
+[✓] upgrade path — manual install — upgrade by reinstalling
+[✓] octos on PATH — resolvable by name
+[✓] no shadowing installs — exactly one (on PATH)
+
+Config
+[✓] config.json — no config file — built-in defaults in effect (run `octos init` for a quickstart)
+
+Provider & auth
+[!] provider — no LLM provider configured
+    → fix: set "provider" (and "model") in config.json, or run `octos init`
+
+Profiles
+[✓] profiles — none yet — created by octos-tui onboarding (or `octos serve` solo mode)
+
+Stores & data
+[✓] admin audit store — not created yet
+[✓] sessions & ledgers on disk — 0 B across 0 file(s)
+
+Sessions
+[✓] sessions — none stored yet
+
+Skills
+[✓] skills — none installed
+
+MCP
+[✓] MCP servers — none configured
+
+Channels
+[✓] gateway channels — gateway not configured — chat/serve modes only
+
+Sandbox
+[✓] sandbox backend — Auto → Windows AppContainer
+
+Network
+[✓] GitHub reachable — api.github.com responded
+[✓] latest release — up to date (v2.0.2)
+
+Terminal environment
+[✓] TERM set — xterm-256color
+[✓] UTF-8 locale — C.UTF-8
+[✓] CJK width — uses unicode-width for double-width glyphs (also depends on terminal font)
+[✓] color support — 256-color
+
+Config & data
+[!] config dir — C:\Users\Admin（无密码）\AppData\Roaming\octos does not exist yet
+    → fix: mkdir -p C:\Users\Admin（无密码）\AppData\Roaming\octos
+[✓] data dir — present and writable
+
+Backend
+[✓] protocol skew — compatible (octos-ui/v1alpha1 schema v1, all required features present)
+
+• Doctor summary: 22 passed, 2 warning(s). No fatal issues found.

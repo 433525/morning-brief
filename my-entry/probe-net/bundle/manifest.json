@@ -1,0 +1,20 @@
+{
+  "capabilities": [
+    "storage",
+    "net"
+  ],
+  "id": "probe-net",
+  "integrity": {
+    "bundle_blake3": "0763ed28d97982a6f924081416f2e3550ae01af62402369df5ef770f492dff28"
+  },
+  "name": "Net Probe",
+  "network": {
+    "hosts": [
+      "hn.algolia.com",
+      "www.techmeme.com",
+      "news.google.com"
+    ]
+  },
+  "schema": 1,
+  "version": "0.1.0"
+}

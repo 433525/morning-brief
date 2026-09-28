@@ -1,0 +1,597 @@
+[
+ {
+  "i": "main_window",
+  "ty": "Window",
+  "r": [
+   0,
+   0,
+   412,
+   752
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "caption_bar",
+  "ty": "View",
+  "r": [
+   0,
+   0,
+   412,
+   29
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "caption_label",
+  "ty": "View",
+  "r": [
+   0,
+   0,
+   274,
+   29
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "caption_icon",
+  "ty": "AppIcon",
+  "r": [
+   136,
+   7,
+   16,
+   16
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "label",
+  "ty": "Label",
+  "r": [
+   161,
+   4,
+   113,
+   22
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "Card host [remote]"
+ },
+ {
+  "i": "windows_buttons",
+  "ty": "View",
+  "r": [
+   274,
+   0,
+   138,
+   29
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "min",
+  "ty": "DesktopButton",
+  "r": [
+   274,
+   0,
+   46,
+   29
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "max",
+  "ty": "DesktopButton",
+  "r": [
+   320,
+   0,
+   46,
+   29
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "close",
+  "ty": "DesktopButton",
+  "r": [
+   366,
+   0,
+   46,
+   29
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "body",
+  "ty": "KeyboardView",
+  "r": [
+   0,
+   29,
+   412,
+   723
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "card",
+  "ty": "Splash",
+  "r": [
+   0,
+   29,
+   412,
+   723
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "// Morning Brief - 晨报卡（Agentic App 2026 初赛作品）\r\nlet sources = [\r\n    {id: \"hn\" label: \"Hacker News\" host: \"hn.algolia.com\" note: \"首页热榜 30 条\" kind: \"hn\" url: \"https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30\"}\r\n    {id: \"techmeme\" label: \"TechMeme\" host: \"www.techmeme.com\" note: \"最新条目\" kind: \"digest\" url: \"https://www.techmeme.com/definitely-not-a-real-feed.xml\"}\r\n]\r\nlet topics = [\r\n    {id: \"ai\" label: \"AI\" en: \"(\\\\W|^)(AI|GPT|LLM|OpenAI|Anthropic|DeepMind|Gemini|Claude)(\\\\W|$)\" zh: \"人工智能|大模型|机器学习\"}\r\n    {id: \"oss\" label: \"开源\" en: \"(\\\\W|^)(open source|opensource|Linux|kernel|GitHub|Apache)(\\\\W|$)\" zh: \"开源\"}\r\n    {id: \"sec\" label: \"安全\" en: \"(\\\\W|^)(security|vulnerability|breach|malware|ransomware|exploit|CVE)(\\\\W|$)\" zh: \"安全|漏洞\"}\r\n    {id: \"chip\" label: \"芯片\" en: \"(\\\\W|^)(chip|chips|semiconductor|GPU|silicon|TSMC|Nvidia|wafer)(\\\\W|$)\" zh: \"芯片|半导体\"}\r\n]\r\nlet chosen = {ai: true oss: true sec: false chip: false}\r\nlet limit = 10\r\nlet phase = \"intent\"\r\nlet failed = []\r\nlet picked = []\r\nlet ok_sources = []\r\nlet all_rows = []\r\nlet finished_at = 0\r\nlet last_rows = []\r\nlet last_at = 0\r\nlet busy = false\r\nlet months = [\"January\" \"February\" \"March\" \"April\" \"May\" \"June\" \"July\" \"August\" \"September\" \"October\" \"November\" \"December\"]\r\nlet days = [\"Sunday\" \"Monday\" \"Tuesday\" \"Wednesday\" \"Thursday\" \"Friday\" \"Saturday\"]\r\n\r\nfn fetch(url){\r\n    let p = promise()\r\n    net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{\r\n        on_response: |res| p.resolve(res)\r\n        on_error: |_err| p.resolve(nil)\r\n    }\r\n    p\r\n}\r\n\r\nfn hn_rows(body){\r\n    let out = []\r\n    let data = body.parse_json()\r\n    if data == nil || data.hits == nil { return out }\r\n    for hit in data.hits {\r\n        if hit.title == nil || hit.title == \"\" { continue }\r\n        let discussion = \"https://news.ycombinator.com/item?id=\" + hit.objectID\r\n        let link = discussion\r\n        if hit.url != nil && hit.url != \"\" { link = hit.url }\r\n        let published = 0\r\n        if hit.created_at_i != nil { published = hit.created_at_i }\r\n        out.push({id: \"hn-\" + hit.objectID title: hit.title link: link source: \"Hacker News\" published: published})\r\n    }\r\n    out\r\n}\r\n\r\nfn feed_rows(body, s){\r\n    let items = body.parse_feed(s.kind)\r\n    if items == nil { return nil }\r\n    let out = []\r\n    for i it in items {\r\n        if it.title == nil || it.title == \"\" { continue }\r\n        let source = it.source\r\n        if source == \"\" { source = s.label }\r\n        let published = 0\r\n        if it.published != nil { published = it.published }\r\n        out.push({id: s.id + \"-\" + i title: it.title link: it.link source: source published: published})\r\n    }\r\n    out\r\n}\r\n\r\nfn load_source(s){\r\n    let res = fetch(s.url).await()\r\n    if res == nil || res.status_code >= 400 || res.body == nil {\r\n        failed.push(s.label)\r\n        return\r\n    }\r\n    let body = res.body.to_string()\r\n    let rows = nil\r\n    if s.kind == \"hn\" { rows = hn_rows(body) } else { rows = feed_rows(body, s) }\r\n    if rows == nil || rows.len() == 0 {\r\n        failed.push(s.label)\r\n        return\r\n    }\r\n    ok_sources.push({label: s.label n: rows.len()})\r\n    for r in rows { all_rows.push(r) }\r\n}\r\n\r\nfn topic_hit(t, title){\r\n    if regex(t.en, \"i\").test(title) { return true }\r\n    regex(t.zh, \"i\").test(title)\r\n}\r\n\r\nfn topic_on(id){\r\n    if id == \"ai\" { return chosen[\"ai\"] }\r\n    if id == \"oss\" { return chosen[\"oss\"] }\r\n    if id == \"sec\" { return chosen[\"sec\"] }\r\n    chosen[\"chip\"]\r\n}\r\n\r\nfn row_hit(title){\r\n    let n = 0\r\n    for t in topics { if topic_on(t.id) { n = n + 1 } }\r\n    if n == 0 { return true }\r\n    for t in topics {\r\n        if topic_on(t.id) && topic_hit(t, title) { return true }\r\n    }\r\n    false\r\n}\r\n\r\nfn sort_desc(rows){\r\n    let out = []\r\n    for r in rows {\r\n        let placed = false\r\n        let next = []\r\n        for o in out {\r\n            if !placed && r.published > o.published {\r\n                next.push(r)\r\n                placed = true\r\n            }\r\n            next.push(o)\r\n        }\r\n        if !placed { next.push(r) }\r\n        out = next\r\n    }\r\n    out\r\n}\r\n\r\nfn run_brief(){\r\n    if busy { return }\r\n    busy = true\r\n    all_rows = []\r\n    ok_sources = []\r\n    failed = []\r\n    for s in sources { load_source(s) }\r\n    let hits = []\r\n    for r in all_rows { if row_hit(r.title) { hits.push(r) } }\r\n    hits = sort_desc(hits)\r\n    picked = []\r\n    for i r in hits { if i < limit { picked.push(r) } }\r\n    finished_at = time_now()\r\n    if picked.len() > 0 {\r\n        fs.write(\"last_brief.json\", {ts: finished_at rows: picked}.to_json())\r\n        last_rows = picked\r\n        last_at = finished_at\r\n    } else if failed.len() < sources.len() {\r\n        fs.write(\"last_brief.json\", {ts: finished_at rows: []}.to_json())\r\n        last_rows = []\r\n        last_at = finished_at\r\n    }\r\n    phase = \"done\"\r\n    busy = false\r\n    sync_ui()\r\n}\r\n\r\nfn load_last(){\r\n    if fs.exists(\"last_brief.json\") {\r\n        let v = fs.read(\"last_brief.json\").parse_json()\r\n        if v != nil && v.rows != nil {\r\n            last_rows = v.rows\r\n            last_at = v.ts\r\n        }\r\n    }\r\n}\r\n\r\nfn make_plan(){\r\n    phase = \"plan\"\r\n    sync_ui()\r\n}\r\n\r\nfn approve(){\r\n    phase = \"fetching\"\r\n    sync_ui()\r\n    start_timeout(0.05, || run_brief())\r\n}\r\n\r\nfn deny(){\r\n    phase = \"denied\"\r\n    sync_ui()\r\n}\r\n\r\nfn restart(){\r\n    phase = \"intent\"\r\n    picked = []\r\n    failed = []\r\n    ok_sources = []\r\n    all_rows = []\r\n    sync_ui()\r\n}\r\n\r\nfn toggle_topic(id){\r\n    if id == \"ai\" { if chosen[\"ai\"] { chosen[\"ai\"] = false } else { chosen[\"ai\"] = true } }\r\n    else if id == \"oss\" { if chosen[\"oss\"] { chosen[\"oss\"] = false } else { chosen[\"oss\"] = true } }\r\n    else if id == \"sec\" { if chosen[\"sec\"] { chosen[\"sec\"] = false } else { chosen[\"sec\"] = true } }\r\n    else { if chosen[\"chip\"] { chosen[\"chip\"] = false } else { chosen[\"chip\"] = true } }\r\n    sync_ui()\r\n}\r\n\r\nfn bump(d){\r\n    limit = limit + d\r\n    if limit < 3 { limit = 3 }\r\n    if limit > 30 { limit = 30 }\r\n    sync_ui()\r\n}\r\n\r\nfn topics_line(){\r\n    let out = \"\"\r\n    for t in topics {\r\n        if topic_on(t.id) {\r\n            if out != \"\" { out = out + \"、\" }\r\n            out = out + t.label\r\n        }\r\n    }\r\n    if out == \"\" { return \"未选主题（全部放行）\" }\r\n    out\r\n}\r\n\r\nfn hosts_line(){\r\n    let out = \"\"\r\n    for s in sources {\r\n        if out != \"\" { out = out + \"、\" }\r\n        out = out + s.host\r\n    }\r\n    out\r\n}\r\n\r\nfn sources_line(){\r\n    if ok_sources.len() == 0 { return \"无\" }\r\n    let out = \"\"\r\n    for s in ok_sources {\r\n        if out != \"\" { out = out + \" · \" }\r\n        out = out + s.label + \" \" + s.n + \" 条\"\r\n    }\r\n    out\r\n}\r\n\r\nfn chip_label(id){\r\n    let label = id\r\n    for t in topics { if t.id == id { label = t.label } }\r\n    if topic_on(id) { return \"[x] \" + label }\r\n    \"[ ] \" + label\r\n}\r\n\r\nfn full_intent(){\r\n    \"给我今天的科技晨报，只要 \" + topics_line() + \" 相关，\" + limit + \" 条以内。\"\r\n}\r\n\r\nfn pad2(n){\r\n    if n < 10 { return \"0\" + n }\r\n    \"\" + n\r\n}\r\n\r\nfn gen_time(){\r\n    if finished_at <= 0 { return \"尚未生成\" }\r\n    let t = local_time()\r\n    days[t.weekday] + \" \" + months[t.month - 1] + \" \" + t.day + \"  \" + pad2(t.hour) + \":\" + pad2(t.minute)\r\n}\r\n\r\nfn ago(secs){\r\n    if secs == nil || secs <= 0 { return \"\" }\r\n    let d = time_now() - secs\r\n    if d < 60 { return \"just now\" }\r\n    if d < 3600 { return \"\" + floor(d / 60) + \"m ago\" }\r\n    if d < 86400 { return \"\" + floor(d / 3600) + \"h ago\" }\r\n    \"\" + floor(d / 86400) + \"d ago\"\r\n}\r\n\r\nfn row_meta(r){\r\n    let line = r.source\r\n    let a = ago(r.published)\r\n    if a != \"\" { line = line + \"  ·  \" + a }\r\n    line\r\n}\r\n\r\nfn status_line(){\r\n    if phase == \"fetching\" { return \"正在获取 \" + sources.len() + \" 个来源…\" }\r\n    if phase == \"done\" {\r\n        if failed.len() == 0 { return \"已完成。\" }\r\n        if failed.len() < sources.len() { return \"部分完成。\" }\r\n        return \"未能获取任何来源。\"\r\n    }\r\n    \"\"\r\n}\r\n\r\nfn fail_line(){\r\n    if failed.len() == 0 { return \"\" }\r\n    let out = \"失败来源：\"\r\n    for f in failed {\r\n        if out != \"失败来源：\" { out = out + \"、\" }\r\n        out = out + f\r\n    }\r\n    if failed.len() == sources.len() { return out + \"（全部失败）\" }\r\n    out + \"（其余来源结果如下，条数未补齐）\"\r\n}\r\n\r\nfn empty_line(){\r\n    if phase == \"fetching\" { return \"正在获取…\" }\r\n    if failed.len() == sources.len() { return \"无法获取任何来源。\" }\r\n    \"未找到符合「\" + topics_line() + \"」的条目 — 这是筛选结果，不是获取失败。\"\r\n}\r\n\r\nfn stale_line(){\r\n    if failed.len() == sources.len() && last_rows.len() > 0 { return \"以下为上次成功结果，\" + ago(last_at) + \"，已过期\" }\r\n    \"\"\r\n}\r\n\r\nfn pick_row(r){\r\n    ui.sel_line.set_text(\"已选中（id \" + r.id + \"）：\" + r.title)\r\n}\r\n\r\nfn sync_ui(){\r\n    ui.date.set_text(gen_time())\r\n    ui.intent_line.set_text(full_intent())\r\n    ui.chip_ai.set_text(chip_label(\"ai\"))\r\n    ui.chip_oss.set_text(chip_label(\"oss\"))\r\n    ui.chip_sec.set_text(chip_label(\"sec\"))\r\n    ui.chip_chip.set_text(chip_label(\"chip\"))\r\n    ui.limit_label.set_text(\"\" + limit)\r\n    ui.gen_pane.set_visible(phase == \"intent\")\r\n    ui.plan_pane.set_visible(phase == \"plan\")\r\n    ui.run_pane.set_visible(phase == \"fetching\" || phase == \"done\")\r\n    ui.deny_pane.set_visible(phase == \"denied\")\r\n    ui.plan_topics.set_text(plan_text())\r\n    ui.plan_limit.set_text(\"条数上限：\" + limit + \" 条\")\r\n    ui.plan_hosts.set_text(\"将发起网络请求的域名：\" + hosts_line())\r\n    ui.plan_ask.set_text(ask_text())\r\n    ui.status_line.set_text(status_line())\r\n    ui.fail_line.set_text(fail_line())\r\n    ui.st_gen.set_text(\"生成时间    \" + gen_time())\r\n    ui.st_topics.set_text(\"筛选主题    \" + topics_line())\r\n    ui.st_src.set_text(\"来源        \" + sources_line())\r\n    ui.st_count.set_text(\"命中条数    \" + picked.len() + \" 条（上限 \" + limit + \"）\")\r\n    ui.stale_line.set_text(stale_line())\r\n    ui.list.render()\r\n}\r\n\r\nfn plan_text(){\r\n    let out = \"操作计划\\n\"\r\n    for s in sources { out = out + \"  · \" + s.label + \" - \" + s.note + \"\\n\" }\r\n    out + \"筛选主题：\" + topics_line() + \"\\n\" + \"排序：按发布时间从新到旧\"\r\n}\r\n\r\nfn ask_text(){\r\n    \"批准后才会发起网络请求；选择「暂不」则不产生任何请求。\"\r\n}\r\n\r\nfn boot(){\r\n    load_last()\r\n    sync_ui()\r\n}\r\nstart_timeout(0.05, || boot())\r\n\r\nlet ink = #x1c1c1e\r\nlet secondary = #x8e8e93\r\nlet accent = #xe0245e\r\nlet ground = #xf2f2f7\r\n\r\nlet ChipBtn = ButtonFlat{height: 32 padding: Inset{left: 12 right: 12}\r\n    draw_bg +: {border_radius: 16.0 color: #xffffff color_hover: #xf0f0f5 color_down: #xe5e5ea border_size: 1.0\r\n        border_color: #xd8d8de border_color_hover: #xd8d8de border_color_down: #xd8d8de}\r\n    draw_text +: {color: ink color_hover: ink color_down: ink text_style +: {font_size: 13}}\r\n}\r\nlet NumBtn = ButtonFlat{height: 30 padding: Inset{left: 12 right: 12}\r\n    draw_bg +: {border_radius: 15.0 color: #xffffff color_hover: #xf0f0f5 color_down: #xe5e5ea border_size: 1.0\r\n        border_color: #xd8d8de border_color_hover: #xd8d8de border_color_down: #xd8d8de}\r\n    draw_text +: {color: ink color_hover: ink color_down: ink text_style +: {font_size: 15}}\r\n}\r\nlet PrimaryBtn = ButtonFlat{height: 42 padding: Inset{left: 18 right: 18}\r\n    draw_bg +: {border_radius: 10.0 color: accent color_hover: #xc81e52 color_down: #ab1a46 border_size: 0.0}\r\n    draw_text +: {color: #xffffff color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 15}}\r\n}\r\nlet GhostBtn = ButtonFlat{height: 42 padding: Inset{left: 18 right: 18}\r\n    draw_bg +: {border_radius: 10.0 color: #x00000000 color_hover: #x0000000a color_down: #x00000014 border_size: 1.0\r\n        border_color: #c8c8d0 border_color_hover: #c8c8d0 border_color_down: #c8c8d0}\r\n    draw_text +: {color: #x3a3a3c color_hover: #x3a3a3c color_down: #x3a3a3c text_style +: {font_size: 15}}\r\n}\r\nlet RowCard = RoundedView{width: Fill height: Fit flow: Down spacing: 3\r\n    padding: Inset{top: 10 bottom: 10 left: 12 right: 12}\r\n    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0\r\n    rm := Label{width: Fill text: \"\" max_lines: 1 draw_text.color: secondary draw_text.text_style.font_size: 10}\r\n    rt := Label{width: Fill text: \"\" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}\r\n}\r\n\r\nHostedView{width: Fill height: Fill\r\n    full: View{width: Fill height: Fill flow: Overlay show_bg: true draw_bg.color: ground\r\n        ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 top: 14 bottom: 28}\r\n            View{width: Fill height: Fit flow: Down spacing: 2\r\n                date := Label{width: Fill text: \"\" draw_text.color: secondary draw_text.text_style: theme.font_bold{font_size: 11}}\r\n                Label{width: Fill text: \"晨报卡\" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 28}}\r\n            }\r\n            intent_line := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}\r\n            View{width: Fill height: Fit flow: Right spacing: 6\r\n                chip_ai := ChipBtn{text: \"AI\" on_click: || toggle_topic(\"ai\")}\r\n                chip_oss := ChipBtn{text: \"开源\" on_click: || toggle_topic(\"oss\")}\r\n                chip_sec := ChipBtn{text: \"安全\" on_click: || toggle_topic(\"sec\")}\r\n                chip_chip := ChipBtn{text: \"芯片\" on_click: || toggle_topic(\"chip\")}\r\n            }\r\n            View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8\r\n                Label{text: \"条数上限\" draw_text.color: secondary draw_text.text_style.font_size: 12}\r\n                NumBtn{text: \"-\" on_click: || bump(-1)}\r\n                limit_label := Label{text: \"10\" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 15}}\r\n                NumBtn{text: \"+\" on_click: || bump(1)}\r\n            }\r\n            gen_pane := View{width: Fill height: Fit\r\n                PrimaryBtn{text: \"生成晨报\" on_click: || make_plan()}\r\n            }\r\n            plan_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 8\r\n                new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0\r\n                padding: Inset{top: 12 bottom: 12 left: 14 right: 14}\r\n                Label{width: Fill text: \"待批准的 Agent 计划\" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 12}}\r\n                plan_topics := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}\r\n                plan_limit := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}\r\n                plan_hosts := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}\r\n                plan_ask := Label{width: Fill text: \"\" draw_text.color: secondary draw_text.text_style.font_size: 11}\r\n                View{width: Fill height: Fit flow: Right spacing: 8\r\n                    PrimaryBtn{text: \"批准并取数\" on_click: || approve()}\r\n                    GhostBtn{text: \"暂不\" on_click: || deny()}\r\n                }\r\n            }\r\n            run_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 8\r\n                status_line := Label{width: Fill text: \"\" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}\r\n                fail_line := Label{width: Fill text: \"\" draw_text.color: #xc0392b draw_text.text_style.font_size: 12}\r\n                View{width: Fill height: Fit flow: Down spacing: 4\r\n                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0\r\n                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}\r\n                    st_gen := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}\r\n                    st_topics := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}\r\n                    st_src := Label{width: Fill text: \"\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}\r\n                    st_count := Label{width: Fill text: \"\" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 12}}\r\n                }\r\n                stale_line := Label{width: Fill text: \"\" draw_text.color: #xb26a00 draw_text.text_style.font_size: 12}\r\n                list := View{width: Fill height: Fit flow: Down spacing: 8 on_render: || {\r\n                    if picked.len() == 0 {\r\n                        View{width: Fill height: 80 align: Align{x: 0.5 y: 0.5}\r\n                            Label{text: empty_line() draw_text.color: secondary draw_text.text_style.font_size: 12}\r\n                        }\r\n                    }\r\n                    else for r in picked {\r\n                        GestureView{width: Fill height: Fit on_tap: |x, y| pick_row(r)\r\n                            RowCard{rm.text: row_meta(r) rt.text: r.title}\r\n                        }\r\n                    }\r\n                }}\r\n                sel_line := Label{width: Fill text: \"点击任意条目可核对标题与来源。\" draw_text.color: secondary draw_text.text_style.font_size: 11}\r\n                View{width: Fill height: Fit flow: Right\r\n                    GhostBtn{text: \"重新开始\" on_click: || restart()}\r\n                }\r\n            }\r\n            deny_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 8\r\n                new_batch: true show_bg: true draw_bg.color: #xfff6e5 draw_bg.border_radius: 12.0\r\n                padding: Inset{top: 12 bottom: 12 left: 14 right: 14}\r\n                Label{width: Fill text: \"已取消 — 未发起任何网络请求。\" draw_text.color: #xb26a00 draw_text.text_style: theme.font_bold{font_size: 13}}\r\n                Label{width: Fill text: \"你的授权是取数的前提；拒绝后不会读取任何来源。\" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}\r\n                View{width: Fill height: Fit flow: Right\r\n                    GhostBtn{text: \"重新开始\" on_click: || restart()}\r\n                }\r\n            }\r\n        }\r\n    }\r\n    tile: View{width: Fill height: Fill flow: Down padding: Inset{left: 14 right: 14 top: 12 bottom: 12} spacing: 6\r\n        new_batch: true show_bg: true draw_bg.color: #xffffff\r\n        Label{text: \"晨报卡\" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 13}}\r\n        Label{width: Fill text: \"一句话意图，生成一份可核验的晨报。\" max_lines: 3 draw_text.color: ink draw_text.text_style.font_size: 12}\r\n    }\r\n}"
+ },
+ {
+  "i": "23",
+  "ty": "HostedView",
+  "r": [
+   0,
+   29,
+   412,
+   723
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "-",
+  "ty": "View",
+  "r": [
+   0,
+   29,
+   412,
+   723
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "-",
+  "ty": "View",
+  "r": [
+   14,
+   43,
+   384,
+   88
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "date",
+  "ty": "Label",
+  "r": [
+   17,
+   46,
+   378,
+   24
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "Sunday September 27  06:48"
+ },
+ {
+  "i": "-",
+  "ty": "Label",
+  "r": [
+   17,
+   78,
+   378,
+   51
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "晨报卡"
+ },
+ {
+  "i": "intent_line",
+  "ty": "Label",
+  "r": [
+   17,
+   144,
+   378,
+   52
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "给我今天的科技晨报，只要 AI、开源 相关，10 条以内。"
+ },
+ {
+  "i": "1",
+  "ty": "View",
+  "r": [
+   14,
+   209,
+   384,
+   38
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "chip_ai",
+  "ty": "Button",
+  "r": [
+   14,
+   212,
+   66,
+   32
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "[x] AI"
+ },
+ {
+  "i": "chip_oss",
+  "ty": "Button",
+  "r": [
+   86,
+   212,
+   83,
+   32
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "[x] 开源"
+ },
+ {
+  "i": "chip_sec",
+  "ty": "Button",
+  "r": [
+   175,
+   212,
+   78,
+   32
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "[ ] 安全"
+ },
+ {
+  "i": "chip_chip",
+  "ty": "Button",
+  "r": [
+   259,
+   212,
+   78,
+   32
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "[ ] 芯片"
+ },
+ {
+  "i": "2",
+  "ty": "View",
+  "r": [
+   14,
+   257,
+   384,
+   36
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "-",
+  "ty": "Label",
+  "r": [
+   17,
+   263,
+   70,
+   25
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "条数上限"
+ },
+ {
+  "i": "1",
+  "ty": "Button",
+  "r": [
+   98,
+   260,
+   32,
+   30
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "-"
+ },
+ {
+  "i": "limit_label",
+  "ty": "Label",
+  "r": [
+   141,
+   260,
+   30,
+   30
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "10"
+ },
+ {
+  "i": "2",
+  "ty": "Button",
+  "r": [
+   182,
+   260,
+   36,
+   30
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "+"
+ },
+ {
+  "i": "run_pane",
+  "ty": "View",
+  "r": [
+   14,
+   303,
+   384,
+   449
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "status_line",
+  "ty": "Label",
+  "r": [
+   17,
+   306,
+   378,
+   28
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "部分完成。"
+ },
+ {
+  "i": "fail_line",
+  "ty": "Label",
+  "r": [
+   17,
+   349,
+   378,
+   48
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "失败来源：TechMeme（其余来源结果如下，条数未补齐）"
+ },
+ {
+  "i": "-",
+  "ty": "View",
+  "r": [
+   14,
+   408,
+   384,
+   161
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "st_gen",
+  "ty": "Label",
+  "r": [
+   31,
+   423,
+   350,
+   25
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "生成时间    Sunday September 27  06:48"
+ },
+ {
+  "i": "st_topics",
+  "ty": "Label",
+  "r": [
+   31,
+   458,
+   350,
+   25
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "筛选主题    AI、开源"
+ },
+ {
+  "i": "st_src",
+  "ty": "Label",
+  "r": [
+   31,
+   493,
+   350,
+   25
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "来源        Hacker News 30 条"
+ },
+ {
+  "i": "st_count",
+  "ty": "Label",
+  "r": [
+   31,
+   528,
+   350,
+   25
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "命中条数    3 条（上限 10）"
+ },
+ {
+  "i": "stale_line",
+  "ty": "Label",
+  "r": [
+   17,
+   580,
+   378,
+   25
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": " "
+ },
+ {
+  "i": "list",
+  "ty": "View",
+  "r": [
+   14,
+   616,
+   384,
+   136
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "-",
+  "ty": "GestureView",
+  "r": [
+   14,
+   616,
+   384,
+   112
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "-",
+  "ty": "View",
+  "r": [
+   14,
+   616,
+   384,
+   112
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "rm",
+  "ty": "Label",
+  "r": [
+   29,
+   629,
+   354,
+   22
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "Hacker News  ·  1d ago"
+ },
+ {
+  "i": "rt",
+  "ty": "Label",
+  "r": [
+   29,
+   660,
+   354,
+   55
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "Generate fonts where every LLM token is the same width"
+ },
+ {
+  "i": "1",
+  "ty": "GestureView",
+  "r": [
+   14,
+   736,
+   384,
+   16
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "-",
+  "ty": "View",
+  "r": [
+   14,
+   736,
+   384,
+   16
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true
+ },
+ {
+  "i": "rm",
+  "ty": "Label",
+  "r": [
+   29,
+   749,
+   354,
+   3
+  ],
+  "w": 0,
+  "window_id": "main_window",
+  "enabled": true,
+  "t": "Hacker News  ·  2d ago"
+ }
+]
