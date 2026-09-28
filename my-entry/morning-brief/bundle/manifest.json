@@ -13,11 +13,7 @@
   },
   "id": "morning-brief",
   "integrity": {
-    "bundle_blake3": "1635c84951c974154669799afe45c0ea91eb7bb960b76767405463df8aaf4b10",
-    "signature": {
-      "key_id": "gongchuang",
-      "value": "a7eb41bdc1ec170c76c344598ad2397dce72f795aef22cd5c6804ec49d6cd5bfa8c5b4c9d7b1eebd1949a4c90458ddd1dd730ada94b6f703e1eafe6404ad7a09"
-    }
+    "bundle_blake3": "1635c84951c974154669799afe45c0ea91eb7bb960b76767405463df8aaf4b10"
   },
   "name": "Morning Brief",
   "network": {
