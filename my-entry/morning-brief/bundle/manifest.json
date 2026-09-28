@@ -1,4 +1,5 @@
 {
+  "agent": null,
   "capabilities": [
     "storage",
     "net",
@@ -6,9 +7,17 @@
     "web",
     "llm"
   ],
+  "compute": {
+    "instruction_budget": null,
+    "memory_bytes": null
+  },
   "id": "morning-brief",
   "integrity": {
-    "bundle_blake3": "7406963c2ed85524a242dc180d37879760283c05c774e0ae51c67337dbf73ff9"
+    "bundle_blake3": "7406963c2ed85524a242dc180d37879760283c05c774e0ae51c67337dbf73ff9",
+    "signature": {
+      "key_id": "gongchuang",
+      "value": "bbe21bd1dcc11b15d4e9861877a6de72f5c02daac69d3f2920e16789047660e77776755c432d3fca733b7c8c94e2e153d1b9f257988bb7fded702dd85ed4a001"
+    }
   },
   "name": "Morning Brief",
   "network": {
@@ -18,5 +27,8 @@
     ]
   },
   "schema": 1,
+  "storage": {
+    "max_bytes": null
+  },
   "version": "0.1.0"
 }
