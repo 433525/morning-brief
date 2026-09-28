@@ -36,6 +36,18 @@ python tools\brace.py
 
 `tools\run.ps1` 里的路径按本机实际安装位置调整即可。
 
+## 仓库与推送（本机注意）
+
+- 仓库地址：https://github.com/jscjscjscjscjsc/morning-brief （public）
+- 本机到 `github.com:443` 的 HTTPS 被阻断，且 `~/.gitconfig` 里的本地代理 `127.0.0.1:7899` 已失效，因此**推送走 SSH**：
+
+```powershell
+# 远端已配置为 ssh://git@ssh.github.com:443/jscjscjscjscjsc/morning-brief.git
+$env:GIT_SSH_COMMAND='"C:/Windows/System32/OpenSSH/ssh.exe" -o StrictHostKeyChecking=no'
+git push
+```
+
+- 若想恢复 HTTPS 推送：启动本地代理后 `git config --global http.https://github.com.proxy http://127.0.0.1:7899`，或把该行删掉改用直连。
 ## 目录结构
 
 | 路径 | 说明 |
