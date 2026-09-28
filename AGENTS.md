@@ -33,13 +33,14 @@
 
 1. `OctoScript-App-Design-Flow`（官方开发流程仓库，含 `tools/octo` 驱动脚本）
 2. `OctoSense-App-Hub`（含 `card-host` 宿主）
-3. 按 `04_项目实操指南.md` 一步步装好
+3. **下载命令看 `07_官方仓库下载说明.md`**（含国内网络实测可用的镜像写法），安装步骤看 `04_项目实操指南.md`
 
 装好后，运行一个卡片的标准动作是：
 
 ```bash
-# 语法校验（改完 main.splash 必做；仓库里有同一份脚本）
-python tools/brace.py
+# 语法校验（改完 main.splash 必做；CI 也会跑这一关）
+python tools/brace.py                       # 自动定位主文件
+python tools/brace.py <path/to/main.splash> # 或指定文件；退出码 1 = 有问题
 
 # 启动卡片（card-host，端口自定，下面以 8136 为例）
 python <OctoScript-App-Design-Flow>/tools/octo run my-entry/morning-brief/bundle \
@@ -117,7 +118,8 @@ git push -u origin round-30/你的主题
 3. 证据在哪（`my-entry/evidence/xxx.png`）
 
 **维护者对所有 PR 的默认态度是全同意**（小鞠老师会直接批），不用等讨论；只要你的改动：
-- 让 `python tools/brace.py` 通过
+- 让 `python tools/brace.py` 通过 —— **CI 会自动帮你跑这一关**（`.github/workflows/check.yml`，
+  PR 上看到绿色才说明语法体检过了；本地也可以自己先跑）
 - 实机跑过并在 `my-entry/evidence/` 留下截图
 - 没破坏既有功能（尤其：**联网必须用户明确批准**这条底线不能破）
 
@@ -154,5 +156,7 @@ hub check my-entry/morning-brief/bundle --publisher-key "gongchuang=<公钥>"
 | `项目复盘/` | 每轮进化复盘（大白话，能看懂"这轮到底变好了什么"） |
 | `06_创新思路清单.md` | 三档共 16 条大胆方向 + 推荐三选 |
 | `02_比赛方案.md` | 参赛策略 |
+| `07_官方仓库下载说明.md` | **环境下载**：官方仓库从哪来、怎么下（镜像命令 + 踩坑） |
 | `04_项目实操指南.md` | **环境搭建**：从零装好官方运行环境 |
+| `07_官方仓库下载说明.md` | **换机器/队友搭环境**：16 个官方仓库地址、gh-proxy 镜像下载姿势、给 AI Agent 的复制即用指令 |
 | `README.md` | 项目总览与快速开始 |
