@@ -70,6 +70,13 @@ git push
 | `00`–`05` 开头的 Markdown | 比赛策略、分工、实操指南、跑通实录 |
 | `tools/` | 运行 / 截图 / 语法校验脚本 |
 
+## 接力任务与贡献
+
+- **接力任务（GitHub Issue #1）**：https://github.com/jscjscjscjscjsc/morning-brief/issues/1
+  —— 后来的人/AI agent 看这一条就知道背景与下一步。
+- **AI agent 入口**：仓库根目录的 `AGENTS.md`（背景 / 状态 / 环境 / 红线 / 贡献流程）。
+- 提交改动：开 `round-<轮次>/<主题>` 分支 → PR（模板已备好）→ 维护者默认全同意。
+
 ## 贡献指南（欢迎继续改）
 
 1. 改代码前先读 `进度交接_第30轮前.md` 的「六、坑（务必记住）」
