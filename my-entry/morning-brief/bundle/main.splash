@@ -1502,10 +1502,25 @@ fn art_load(){
     }
 }
 
+fn cg_off(){
+    ui.cg_eye.set_text("")
+    ui.cg_ttl.set_text("")
+    ui.cg_rul.set_text("")
+    ui.cg.set_visible(false)
+}
+
+fn cg_text(){
+    ui.cg_eye.set_text("A I   E D I T I O N")
+    ui.cg_ttl.set_text("晨报卡")
+    ui.cg_rul.set_text("— 今日头版 —")
+}
+
 fn boot(){
     load_last()
     art_load()
     sync_ui()
+    start_timeout(1.10, || cg_text())
+    start_timeout(3.12, || cg_off())
 }
 start_timeout(0.05, || boot())
 
@@ -1773,6 +1788,83 @@ HostedView{width: Fill height: Fill
                 }
             }
         }
+        cg := View{width: Fill height: Fill show_bg: true
+            new_batch: true
+            draw_bg +: {
+                pixel: fn() {
+                    let cgT = self.draw_pass.time * 1.0
+                    let cgSz = self.rect_size
+                    let cgP = self.pos * cgSz
+                    let cgCx = cgSz.x * 0.5
+                    let cgCy = cgSz.y * 0.5
+                    let cgInkA = #x07090f
+                    let cgInkB = #x0d1220
+                    let cgGrid = #x223050
+                    let cgDawn = #xffd39a
+                    let cgHot = #xfff6e6
+                    let cgAcc = #xe0245e
+
+                    let cgVg = clamp(cgP.y / cgSz.y, 0.0, 1.0)
+                    var cgCol = cgInkA.mix(cgInkB, cgVg * 0.9)
+
+                    let cgGA = smoothstep(0.55 1.70 cgT) * 0.5
+                    let cgCell = 44.0
+                    let cgDx = abs(fract(cgP.x / cgCell + 0.5) - 0.5) * cgCell
+                    let cgDy = abs(fract(cgP.y / cgCell + 0.5) - 0.5) * cgCell
+                    let cgGl = (1.0 - smoothstep(0.0 1.2 min(cgDx cgDy))) * cgGA
+                    cgCol = cgCol.mix(cgGrid.mix(cgDawn, 0.22), cgGl)
+
+                    let cgRise = smoothstep(1.70 2.90 cgT)
+                    let cgBandY = cgSz.y * (1.15 - 1.35 * cgRise)
+                    let cgDb = abs(cgP.y - cgBandY)
+                    let cgBand = 1.0 - smoothstep(0.0 190.0 cgDb)
+                    let cgCore = 1.0 - smoothstep(0.0 34.0 cgDb)
+                    let cgBx = 1.0 - smoothstep(0.0 230.0 abs(cgP.x - cgCx))
+                    cgCol = cgCol.mix(cgDawn, cgBand * cgBx * 0.42)
+                    cgCol = cgCol.mix(cgHot, cgCore * cgBx * 0.85)
+
+                    let cgPa = smoothstep(0.25 2.60 cgT)
+                    let cgPd = 1.0 - cgPa
+                    let cgKk = cgPa * cgPa
+
+                    let cgR0 = 300.0 * (1.0 - cgKk) + 46.0 * cgKk
+                    let cgA0 = 0.4 + cgT * 0.85
+                    let cgM0 = (1.0 - smoothstep(0.0 3.2 length(cgP - vec2(cgCx + cos(cgA0) * cgR0 * 1.15, cgCy + sin(cgA0) * cgR0)))) * (0.45 + 0.55 * cgPd)
+                    cgCol = cgCol.mix(cgHot, cgM0 * 0.95)
+
+                    let cgR1 = 340.0 * (1.0 - cgKk) + 62.0 * cgKk
+                    let cgA1 = 2.1 + cgT * 0.72
+                    let cgM1 = (1.0 - smoothstep(0.0 2.8 length(cgP - vec2(cgCx + cos(cgA1) * cgR1 * 1.25, cgCy + sin(cgA1) * cgR1)))) * (0.42 + 0.58 * cgPd)
+                    cgCol = cgCol.mix(cgDawn, cgM1 * 0.9)
+
+                    let cgR2 = 268.0 * (1.0 - cgKk) + 38.0 * cgKk
+                    let cgA2 = 3.6 + cgT * 1.05
+                    let cgM2 = (1.0 - smoothstep(0.0 2.6 length(cgP - vec2(cgCx + cos(cgA2) * cgR2 * 1.05, cgCy + sin(cgA2) * cgR2)))) * (0.4 + 0.6 * cgPd)
+                    cgCol = cgCol.mix(#xffe9c4, cgM2 * 0.9)
+
+                    let cgR3 = 380.0 * (1.0 - cgKk) + 78.0 * cgKk
+                    let cgA3 = 5.2 + cgT * 0.62
+                    let cgM3 = (1.0 - smoothstep(0.0 2.4 length(cgP - vec2(cgCx + cos(cgA3) * cgR3 * 1.35, cgCy + sin(cgA3) * cgR3)))) * (0.38 + 0.62 * cgPd)
+                    cgCol = cgCol.mix(cgDawn, cgM3 * 0.85)
+
+                    let cgSlY = cgSz.y * fract(cgT * 0.14 + 0.05)
+                    let cgSl = (1.0 - smoothstep(0.0 2.5 abs(cgP.y - cgSlY))) * (1.0 - smoothstep(2.90 3.35 cgT))
+                    cgCol = cgCol.mix(cgAcc, cgSl * 0.8)
+
+                    let cgFlash = smoothstep(2.90 3.08 cgT)
+                    cgCol = cgCol.mix(#xffffff, cgFlash * 0.94)
+
+                    let cgOut = 1.0
+                    return vec4(cgCol.x * cgOut cgCol.y * cgOut cgCol.z * cgOut cgOut)
+                }
+            }
+            View{width: Fill height: Fill flow: Down align: Align{x: 0.5 y: 0.5} spacing: 10
+                cg_eye := Label{width: Fill align: Align{x: 0.5} text: "" draw_text.color: #xffd39a draw_text.text_style.font_size: 11}
+                cg_ttl := Label{width: Fill align: Align{x: 0.5} text: "" draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 30}}
+                cg_rul := Label{width: Fill align: Align{x: 0.5} text: "" draw_text.color: #xe0245e draw_text.text_style.font_size: 12}
+            }
+        }
+
     }
     tile: View{width: Fill height: Fill flow: Down padding: Inset{left: 14 right: 14 top: 12 bottom: 12} spacing: 6
         new_batch: true show_bg: true draw_bg.color: #xffffff
