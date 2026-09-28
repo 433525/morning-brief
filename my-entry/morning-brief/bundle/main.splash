@@ -81,6 +81,23 @@ let roles = [
         ask: "这件事和普通人的生活有什么关系，为什么值得关心？"}
 ]
 
+// ===== 常驻 AI 主编：这个程序的唯一操作者 =====
+// 四层分工：
+//   L1 感知层 ag_context()          —— 把「现在界面上是什么」讲给主编听
+//   L2 决策层 ag_turn()/ag_reply()  —— 一问一答，需要就调用工具，最多四步
+//   L3 工具层 ag_tools / ag_do()    —— 主编能对这个程序做的事（唯一入口）
+//   L4 界面层 ag_dock               —— 常驻对话条（见文件末尾 UI 树）
+let ag_open = false
+let ag_busy = false
+let ag_note = ""
+let ag_draft = ""
+let ag_log = []
+let ag_msgs = []
+let ag_steps = 0
+let ag_used = 0
+let ag_prev = ""
+let ag_last_user = ""
+
 fn fetch(url){
     let p = promise()
     net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{
@@ -95,13 +112,23 @@ fn hn_rows(body){
     let data = body.parse_json()
     if data == nil || data.hits == nil { return out }
     for hit in data.hits {
-        if hit.title == nil || hit.title == "" { continue }
-        let discussion = "https://news.ycombinator.com/item?id=" + hit.objectID
+        // 缺字段的读法是「先取键，再判空」：直接 hit.title 在缺键时会抛错，
+        // 整轮取数会卡死（HN 的 Ask HN 类帖子天生没有 url）。
+        let title = hit["title"]
+        if title == nil { continue }
+        title = "" + title
+        if title == "" { continue }
+        let oid = hit["objectID"]
+        if oid == nil { continue }
+        oid = "" + oid
+        let discussion = "https://news.ycombinator.com/item?id=" + oid
         let link = discussion
-        if hit.url != nil && hit.url != "" { link = hit.url }
+        let u = hit["url"]
+        if u != nil && u != "" { link = "" + u }
         let published = 0
-        if hit.created_at_i != nil { published = hit.created_at_i }
-        out.push({id: "hn-" + hit.objectID title: hit.title link: link source: "Hacker News" published: published
+        let pi = hit["created_at_i"]
+        if pi != nil { published = pi }
+        out.push({id: "hn-" + oid title: title link: link source: "Hacker News" published: published
             summary: "" image: "" discussion: discussion points: hit["points"] comments: hit["num_comments"]})
     }
     out
@@ -112,11 +139,13 @@ fn feed_rows(body, s){
     if items == nil { return nil }
     let out = []
     for i it in items {
-        if it.title == nil || it.title == "" { continue }
-        let source = it.source
-        if source == "" { source = s.label }
+        let itt = it["title"]
+        if itt == nil || itt == "" { continue }
+        let source = it["source"]
+        if source == nil || source == "" { source = s.label }
         let published = 0
-        if it.published != nil { published = it.published }
+        let pu = it["published"]
+        if pu != nil { published = pu }
         out.push({id: s.id + "-" + i title: it.title link: it.link source: source published: published
             summary: it.summary image: it.image discussion: "" points: nil comments: nil})
     }
@@ -140,14 +169,19 @@ fn clean_html(raw){
 }
 
 fn load_source(s){
-    let res = fetch(s.url).await()
-    if res == nil || res.status_code >= 400 || res.body == nil {
+    let rows = nil
+    try {
+        let res = fetch(s.url).await()
+        if res == nil || res.status_code >= 400 || res.body == nil {
+            failed.push(s.label)
+            return
+        }
+        let body = res.body.to_string()
+        if s.kind == "hn" { rows = hn_rows(body) } else { rows = feed_rows(body, s) }
+    } catch err {
         failed.push(s.label)
         return
     }
-    let body = res.body.to_string()
-    let rows = nil
-    if s.kind == "hn" { rows = hn_rows(body) } else { rows = feed_rows(body, s) }
     if rows == nil || rows.len() == 0 {
         failed.push(s.label)
         return
@@ -207,8 +241,10 @@ fn reason_of(id){
 }
 
 fn pad2(n){
-    if n < 10 { return "0" + n }
-    "" + n
+    // 数字拼串必须先转成文本：直接 "0" + n 会在运行时中断整段渲染。
+    let t = "" + n
+    if n < 10 { return "0" + t }
+    t
 }
 
 fn gen_time(){
@@ -229,6 +265,12 @@ fn ago(secs){
     if d < 3600 { return "" + floor(d / 60) + "m ago" }
     if d < 86400 { return "" + floor(d / 3600) + "h ago" }
     "" + floor(d / 86400) + "d ago"
+}
+
+// 纯函数：只由下标算编号。绝不能在渲染循环里再遍历 show_rows()——
+// 那会打断外层迭代，列表只会渲染出第一行。
+fn rank_text(i){
+    pad2(i + 1)
 }
 
 fn row_meta(r){
@@ -856,6 +898,399 @@ fn story_step(d){
 }
 
 
+// =====================================================================
+// L1 感知层 · 主编眼里的这个程序
+// =====================================================================
+fn ag_phase_name(){
+    if phase == "intent" { return "首页（还没开始）" }
+    if phase == "plan" { return "待批准页（取数计划写好了，等用户说批不批）" }
+    if phase == "judging" { return "编辑部初审中（三个视角在独立阅读候选）" }
+    if phase == "fetching" { return "正在联网取数并终审" }
+    if phase == "done" { return "结果页（这一期晨报已经出来）" }
+    if phase == "story" { return "阅读页（正在读一条新闻）" }
+    if phase == "denied" { return "已取消（用户没批准取数）" }
+    "首页"
+}
+
+fn ag_context(){
+    let out = "【当前界面】" + ag_phase_name()
+    out = out + "\n【这一期的设置】主题=" + topics_line() + "；条数上限=" + limit + " 条"
+    if ask != "" { out = out + "；用户写下的关注点=" + ask }
+    let rows = show_rows()
+    if rows.len() > 0 {
+        out = out + "\n【这一期已经入选的条目】（open_story 的 i 按这个序号）"
+        let i = 1
+        for r in rows {
+            if i < 11 { out = out + "\n" + i + ". " + r.title }
+            i = i + 1
+        }
+    }
+    if phase == "story" && story != nil {
+        out = out + "\n【用户正在读的那条】" + story_title
+        if story_sum != "" { out = out + "\n它的摘要：" + art_cut(story_sum, 300) }
+    }
+    out
+}
+
+// =====================================================================
+// L3 工具层 · 主编能对这个程序做的事（唯一入口；界面上的按钮都在这一层有对应）
+// =====================================================================
+let ag_tools = [
+    {id: "set_topics" hint: "换主题" desc: "设置主题过滤，只让列出的主题通过。args: {topics: 字符串数组，元素只取 ai/oss/sec/chip；空数组表示全部放行}"}
+    {id: "set_limit" hint: "改条数" desc: "改这一期的条数上限。args: {n: 3 到 30 的整数}"}
+    {id: "set_intent" hint: "写关注点" desc: "写下一句话，作为这一期的关注点（用户的一句话意图）。args: {text: 一句话}"}
+    {id: "make_plan" hint: "生成计划" desc: "按当前设置写出取数计划，界面进入待批准页（不联网）。用户说「生成/来一份/看今天的」时的第一步。args: {}"}
+    {id: "approve" hint: "批准取数" desc: "批准计划并开始真正联网取数。只有用户明确说出「批准」「开始取数」「同意」时才可调用；用户只说「生成」时不可以调用，要用 make_plan 把计划摆出来请他确认。args: {}"}
+    {id: "deny" hint: "取消" desc: "不批准，取消本次取数，不发起任何网络请求。args: {}"}
+    {id: "restart" hint: "重新开始" desc: "清空当前这一期，回到首页。args: {}"}
+    {id: "open_story" hint: "打开某条" desc: "打开这一期里的第 i 条，进入阅读页。args: {i: 从 1 开始的整数}"}
+    {id: "close_story" hint: "返回列表" desc: "从阅读页返回晨报列表。args: {}"}
+    {id: "step_story" hint: "前后条" desc: "在阅读页跳到相邻一条。args: {d: 1 是下一条，-1 是上一条}"}
+    {id: "redraw_cover" hint: "换头版" desc: "让视觉主编重画今日头版。args: {}"}
+    {id: "draw_art" hint: "画配图" desc: "给正在读的这一条现场画一张配图。args: {}"}
+]
+
+fn ag_tool_lines(){
+    let out = ""
+    for t in ag_tools {
+        if out != "" { out = out + "\n" }
+        out = out + "- " + t.id + "：" + t.desc
+    }
+    out
+}
+
+fn ag_tool_hint(){
+    let out = ""
+    for t in ag_tools {
+        if out != "" { out = out + " · " }
+        out = out + t.hint
+    }
+    out
+}
+
+fn ag_arg(args, key){
+    if args == nil { return nil }
+    args[key]
+}
+
+fn ag_num(v, fallback){
+    let n = sys.num(v)
+    if n != n { return fallback }
+    floor(n)
+}
+
+fn ag_row_at(i){
+    let k = 1
+    for r in show_rows() {
+        if k == i { return r }
+        k = k + 1
+    }
+    nil
+}
+
+fn ag_apply_topics(list){
+    chosen["ai"] = false
+    chosen["oss"] = false
+    chosen["sec"] = false
+    chosen["chip"] = false
+    for t in list {
+        let s = "" + t
+        if s == "ai" || s == "oss" || s == "sec" || s == "chip" { chosen[s] = true }
+    }
+}
+
+// 硬闸门：联网取数必须先拿到用户明确的批准。
+// 用户只说「生成」，主编只能把计划写出来请他确认；说「批准 / 开始取数 / 同意」时才放行。
+fn ag_user_approved(){
+    if ag_last_user == "" { return false }
+    if ag_last_user.search("批准") >= 0 { return true }
+    if ag_last_user.search("开始取数") >= 0 { return true }
+    if ag_last_user.search("同意") >= 0 { return true }
+    if ag_last_user.search("开始吧") >= 0 { return true }
+    if ag_last_user.search("去取数") >= 0 { return true }
+    if ag_last_user.search("确认取数") >= 0 { return true }
+    false
+}
+
+fn ag_do(tool, args){
+    if tool == "set_topics" {
+        let list = []
+        let vs = ag_arg(args, "topics")
+        if vs != nil { for t in vs { list.push("" + t) } }
+        ag_apply_topics(list)
+        sync_ui()
+        return "主题已切换为：" + topics_line()
+    }
+    if tool == "set_limit" {
+        let n = ag_num(ag_arg(args, "n"), limit)
+        limit = n
+        if limit < 3 { limit = 3 }
+        if limit > 30 { limit = 30 }
+        sync_ui()
+        return "条数上限改为 " + limit + " 条"
+    }
+    if tool == "set_intent" {
+        let s = ""
+        let v = ag_arg(args, "text")
+        if v != nil { s = "" + v }
+        ask = s
+        sync_ui()
+        if ask == "" { return "关注点已清空" }
+        return "关注点已写为：" + ask
+    }
+    if tool == "make_plan" {
+        make_plan()
+        return "取数计划已写好，界面切到待批准页；批准前不会联网"
+    }
+    if tool == "approve" {
+        if !ag_user_approved() {
+            return "还没批准：用户没有说「批准」或「开始取数」。请用 say 把计划讲给用户听，等他说了批准再调用本工具（他也可以直接点界面上的「批准并取数」）。"
+        }
+        approve()
+        return "已按用户的话批准取数，正在联网取数"
+    }
+    if tool == "deny" {
+        deny()
+        return "已取消，未发起任何网络请求"
+    }
+    if tool == "restart" {
+        restart()
+        return "已清空这一期，回到首页"
+    }
+    if tool == "open_story" {
+        let i = ag_num(ag_arg(args, "i"), 0)
+        let r = ag_row_at(i)
+        if r == nil { return "没有第 " + i + " 条；现在已经入选 " + show_rows().len() + " 条" }
+        open_story(r)
+        return "已打开第 " + i + " 条：" + r.title
+    }
+    if tool == "close_story" {
+        if phase != "story" { return "现在不在阅读页，不用返回" }
+        close_story()
+        return "已回到晨报列表"
+    }
+    if tool == "step_story" {
+        if phase != "story" { return "现在不在阅读页；先用 open_story 打开某一条" }
+        let d = ag_num(ag_arg(args, "d"), 1)
+        if d < 0 { d = -1 }
+        else { d = 1 }
+        story_step(d)
+        return "已切到：" + story_title
+    }
+    if tool == "redraw_cover" {
+        if picked.len() == 0 { return "现在没有可换的头版；先取数生成这一期" }
+        cover_retry()
+        return "视觉主编已经去重画头版了"
+    }
+    if tool == "draw_art" {
+        if phase != "story" { return "先打开一条新闻（open_story），才能给它画配图" }
+        art_retry()
+        return "正在给这一条画配图"
+    }
+    "没有 " + tool + " 这个工具"
+}
+
+// =====================================================================
+// L2 决策层 · 主编循环：读用户的话 → 说话还是调用工具 → 拿到结果再来一轮
+// =====================================================================
+let ag_shape = {type: "object" required: ["say" "tool"] properties: {say: {type: "string"} tool: {type: "string"} args: {}}}
+
+fn ag_system(){
+    "你是《晨报卡》的常驻 AI 主编，是这个小程序里唯一的操作者：用户用对话让你做界面上的一切事，你也可以直接回答新闻问题。" +
+    "\n\n你能调用的工具（只能从这个清单里选，不能自己发明）：\n" + ag_tool_lines() +
+    "\n\n输出规则：每一轮只输出一个 JSON 对象。say 是给用户看的一句话（中文、口语、不超过 60 字）；tool 是要调用的工具名，不需要工具时填空字符串；args 是工具参数对象，没有参数就写空对象。多步任务一步一个工具，拿到结果再决定下一步，最多六步。同一个工具不要连着调用两次。用户说「生成今天的晨报」这类请求，就是两步：先 set_topics（如果他指定了主题），再 make_plan；到计划页就停手，请他说「批准」（或点界面按钮），绝不要自己调用 approve。事情办完立刻用 say 收尾一句。" +
+    "approve 会真的联网取数：只有用户明确说要生成、批准、开始时才调用它；用户只是问问题、看东西，就直接用 say 回答，不要调用工具。" +
+    "\n\n" + ag_context()
+}
+
+fn ag_model_text(){
+    let m = ai_model
+    if m == "" { m = "官方模型" }
+    m
+}
+
+fn ag_trim_log(){
+    let n = ag_log.len()
+    if n <= 6 { return }
+    let kept = []
+    let i = 0
+    for e in ag_log {
+        if i >= n - 6 { kept.push(e) }
+        i = i + 1
+    }
+    ag_log = kept
+}
+
+fn ag_trim_msgs(){
+    let n = ag_msgs.len()
+    if n <= 10 { return }
+    let kept = []
+    let i = 0
+    for m in ag_msgs {
+        if i >= n - 10 { kept.push(m) }
+        i = i + 1
+    }
+    ag_msgs = kept
+}
+
+fn ag_send(){
+    if ag_busy { return }
+    let text = ag_draft
+    if text == "" { return }
+    ag_draft = ""
+    ui.ag_in.set_text("")
+    ag_log.push({who: "me" text: text})
+    ag_msgs.push({role: "user" content: text})
+    ag_trim_msgs()
+    ag_trim_log()
+    ag_steps = 0
+    ag_prev = ""
+    ag_nudge = 0
+    ag_last_user = text
+    ag_busy = true
+    ag_note = "主编正在读你的话…"
+    sync_ui()
+    start_timeout(0.05, || ag_turn())
+}
+
+fn ag_say(text){
+    ag_draft = text
+    ag_send()
+}
+
+fn ag_turn(){
+    ag_steps = ag_steps + 1
+    if ag_steps > 6 {
+        ag_busy = false
+        ag_note = "这一轮走了六步还没收口，先停在这里"
+        sync_ui()
+        return
+    }
+    let msgs = [{role: "system" content: ag_system()}]
+    for m in ag_msgs { msgs.push(m) }
+    host.request("llm.chat", {messages: msgs as_json: true temperature: 0 max_tokens: 1024 schema: ag_shape label: "brief.agent"}, fn(r){
+        ag_reply(r)
+    })
+}
+
+fn ag_reply(r){
+    if !r.is_ok || r.data == nil || r.data.data == nil {
+        ag_busy = false
+        ag_note = "主编这次没有答复"
+        if r.error != nil && r.error != "" { ag_note = "主编这次没有答复（" + r.error + "）" }
+        ag_log.push({who: "ai" text: "我这边没接上模型，这次答不上来。界面上的按钮都还在，直接点也一样用。"})
+        ag_trim_log()
+        sync_ui()
+        return
+    }
+    let d = r.data.data
+    let say = ""
+    if d.say != nil { say = "" + d.say }
+    let tool = ""
+    if d.tool != nil { tool = "" + d.tool }
+    let args = d["args"]
+    ag_used = ag_used + 1
+    let line = say
+    if tool != "" && tool != "none" {
+        if line != "" { line = line + " " }
+        line = line + "[调用工具 " + tool + "]"
+    }
+    if line != "" { ag_msgs.push({role: "assistant" content: line}) }
+    if say != "" { ag_log.push({who: "ai" text: say}) }
+    if tool == "" || tool == "none" {
+        if ag_unfinished() && ag_nudge_more() { return }
+        ag_busy = false
+        ag_note = "主编 · " + seconds_text(r.data.elapsed_ms) + " · " + ag_model_text()
+        ag_trim_log()
+        sync_ui()
+        return
+    }
+    let sig = tool
+    if args != nil { sig = sig + "|" + args.to_json() }
+    if sig == ag_prev {
+        ag_log.push({who: "tool" text: "· " + tool + " 重复调用已跳过"})
+        ag_msgs.push({role: "user" content: "工具 " + tool + " 刚才已经调用过，结果一样，不用再来一遍。请直接用 say 回一句收尾。"})
+        ag_trim_log()
+        ag_trim_msgs()
+        ag_busy = false
+        ag_note = "已跳过重复调用：" + tool
+        sync_ui()
+        return
+    }
+    ag_prev = sig
+    let res = ag_do(tool, args)
+    ag_log.push({who: "tool" text: "· " + tool + " → " + res})
+    ag_msgs.push({role: "user" content: "工具 " + tool + " 的结果：" + res + "。事情办完就用 say 回一句收尾；还要办就继续调用工具。"})
+    ag_trim_log()
+    ag_trim_msgs()
+    ag_note = "已执行：" + tool
+    sync_ui()
+    start_timeout(0.40, || ag_turn())
+}
+
+// 用户要的是「一份晨报」这类任务，而界面还停在首页 —— 那就是还没办完。
+// （模型会说「这就去出计划」却不真的调用工具，这一步把它推回去。）
+let ag_nudge = 0
+
+fn ag_wants_task(){
+    if ag_last_user == "" { return false }
+    if ag_last_user.search("生成") >= 0 { return true }
+    if ag_last_user.search("来一份") >= 0 { return true }
+    if ag_last_user.search("来一份") >= 0 { return true }
+    if ag_last_user.search("出报") >= 0 { return true }
+    if ag_last_user.search("晨报") >= 0 { return true }
+    if ag_last_user.search("早报") >= 0 { return true }
+    if ag_last_user.search("看今天") >= 0 { return true }
+    false
+}
+
+fn ag_unfinished(){
+    if !ag_wants_task() { return false }
+    if phase == "intent" { return true }
+    false
+}
+
+fn ag_nudge_more(){
+    if ag_nudge >= 2 { return false }
+    ag_nudge = ag_nudge + 1
+    ag_msgs.push({role: "user" content: "（系统提示）界面现在还停在首页，你上一步只是说了要做却没有真的调用工具。请现在真的调用合适的工具把用户的请求办完；如果用户没说批准，办到「待批准页」就停手。"})
+    ag_trim_msgs()
+    ag_busy = true
+    ag_note = "主编还没把事办完，正在继续…"
+    sync_ui()
+    start_timeout(0.35, || ag_turn())
+    true
+}
+
+fn ag_toggle(){
+    ag_open = !ag_open
+    sync_ui()
+}
+
+fn ag_clear(){
+    ag_log = []
+    ag_msgs = []
+    ag_note = ""
+    ag_used = 0
+    sync_ui()
+}
+
+fn ag_set_draft(t){
+    ag_draft = t
+}
+
+fn ag_line(){
+    if ag_busy { return ag_note }
+    if ag_note != "" { return ag_note }
+    "这个程序里的一切都能让我做：改设置、生成、翻页、换头版、画配图。"
+}
+
+fn ag_pill_text(){
+    if ag_busy { return "● 主编在想…" }
+    if ag_open { return "收起主编" }
+    "● AI 主编"
+}
+
 let role_shape = {type: "object" required: ["digest" "votes"] properties: {digest: {type: "string"} votes: {type: "array" items: {type: "integer"}}}}
 
 fn role_of(id){
@@ -1184,9 +1619,32 @@ fn gather(){
     cand_n = cand.len()
 }
 
+let fetch_tick = 0
+
+fn fetch_watch(){
+    if phase != "fetching" { return }
+    fetch_tick = fetch_tick + 1
+    if fetch_tick < 45 { start_timeout(1.0, || fetch_watch()) return }
+    if phase == "fetching" {
+        busy = false
+        if ok_sources.len() == 0 {
+            for s in sources { if !already2(failed, s.label) { failed.push(s.label) } }
+        }
+        phase = "done"
+        sync_ui()
+    }
+}
+
+fn already2(list, label){
+    for x in list { if x == label { return true } }
+    false
+}
+
 fn run_brief(){
     if busy { return }
     busy = true
+    fetch_tick = 0
+    start_timeout(1.0, || fetch_watch())
     gather()
     if ai_ready == 1 {
         phase = "judging"
@@ -1487,6 +1945,11 @@ fn sync_ui(){
     ui.stale_line.set_visible(stale_line() != "")
     ui.list.render()
     ui.art_pane.render()
+    ui.ag_panel.set_visible(ag_open)
+    ui.ag_note.set_text(ag_line())
+    ui.ag_caps.set_text("主编可以：" + ag_tool_hint())
+    ui.ag_pill.set_text(ag_pill_text())
+    if ag_open { ui.ag_log_box.render() }
 }
 
 fn art_load(){
@@ -1510,9 +1973,9 @@ fn cg_off(){
 }
 
 fn cg_text(){
-    ui.cg_eye.set_text("A I   E D I T I O N")
+    ui.cg_eye.set_text("M O R N I N G   B R I E F")
     ui.cg_ttl.set_text("晨报卡")
-    ui.cg_rul.set_text("— 今日头版 —")
+    ui.cg_rul.set_text("— 你的 AI 编辑部，随叫随到 —")
 }
 
 fn boot(){
@@ -1552,17 +2015,17 @@ let BarBtn = ButtonFlat{height: 30 padding: Inset{left: 4 right: 8}
     draw_bg +: {color: #x00000000 color_hover: #x0000000a color_down: #x00000014 border_size: 0.0}
     draw_text +: {color: accent color_hover: accent color_down: accent text_style +: {font_size: 13}}
 }
-let RowCard = RoundedView{width: Fill height: Fit flow: Down spacing: 3
-    padding: Inset{top: 10 bottom: 10 left: 12 right: 12}
-    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0
+let RowText = View{width: Fill height: Fit flow: Down spacing: 3}
+let RowCol = RowText{
     rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: secondary draw_text.text_style.font_size: 10}
     rt := Label{width: Fill text: "" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
     rsu := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: #x6b6b70 draw_text.text_style.font_size: 11}
     rw := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: accent draw_text.text_style.font_size: 11}
     rp := Label{visible: false width: Fill text: "" max_lines: 1 draw_text.color: #x5b3ea8 draw_text.text_style.font_size: 10}
 }
-let RowText = View{width: Fill height: Fit flow: Down spacing: 3}
-let RowCol = RowText{
+let RowCard = RoundedView{width: Fill height: Fit flow: Down spacing: 3
+    padding: Inset{top: 10 bottom: 10 left: 12 right: 12}
+    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0
     rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: secondary draw_text.text_style.font_size: 10}
     rt := Label{width: Fill text: "" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
     rsu := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: #x6b6b70 draw_text.text_style.font_size: 11}
@@ -1575,13 +2038,26 @@ let RowCardImg = RoundedView{width: Fill height: Fit flow: Right spacing: 10 ali
     col := RowCol{}
     rth := Image{width: 66 height: 66 fit: ImageFit.CropToFill draw_bg.color: #xf2f2f5 draw_bg.border_radius: 8.0}
 }
+let DarkBtn = ButtonFlat{height: 32 padding: Inset{left: 14 right: 14}
+    draw_bg +: {border_radius: 16.0 color: #xffffff1f color_hover: #xffffff33 color_down: #xffffff4d border_size: 1.0
+        border_color: #xffffff66 border_color_hover: #xffffff99 border_color_down: #xffffffcc}
+    draw_text +: {color: #xffffff color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 12}}
+}
+let PillBtn = ButtonFlat{height: 34 padding: Inset{left: 16 right: 16}
+    draw_bg +: {border_radius: 17.0 color: #x0e1424 color_hover: #x1a2440 color_down: #x090e1a border_size: 1.0
+        border_color: #xffd39a border_color_hover: #xffd39a border_color_down: #xffd39a}
+    draw_text +: {color: #xffd39a color_hover: #xffd39a color_down: #xffd39a text_style +: {font_size: 13}}
+}
 
 HostedView{width: Fill height: Fill
     full: View{width: Fill height: Fill flow: Overlay show_bg: true draw_bg.color: ground
-        browse := ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 top: 14 bottom: 28}
-            View{width: Fill height: Fit flow: Down spacing: 2
-                date := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style: theme.font_bold{font_size: 11}}
-                Label{width: Fill text: "晨报卡" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 28}}
+        browse := ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 top: 14 bottom: 300}
+            RoundedView{width: Fill height: Fit flow: Down spacing: 3
+                new_batch: true draw_bg.color: #x0e1424 draw_bg.border_radius: 14.0
+                padding: Inset{top: 14 bottom: 14 left: 14 right: 14}
+                date := Label{width: Fill text: "" draw_text.color: #x8fa3c8 draw_text.text_style.font_size: 11}
+                Label{width: Fill text: "晨报卡" draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 26}}
+                Label{width: Fill text: "MORNING BRIEF · AI EDITION · 常驻主编在线" draw_text.color: #xe0245e draw_text.text_style.font_size: 10}
             }
             intent_line := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
             ask_in := TextInput{width: Fill height: 40 empty_text: "也可以直接写，例如：我想看芯片和 AI 的大新闻"
@@ -1610,15 +2086,15 @@ HostedView{width: Fill height: Fill
                 new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
                 padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
                 Label{width: Fill text: "待批准的 Agent 计划" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 12}}
-                plan_topics := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
-                plan_limit := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
-                plan_hosts := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
-                plan_ai := Label{width: Fill text: "" draw_text.color: #x1c1c1e draw_text.text_style: theme.font_bold{font_size: 12}}
-                plan_ask := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
                 View{width: Fill height: 44 flow: Right spacing: 8 align: Align{y: 0.5}
                     PrimaryBtn{text: "批准并取数" on_click: || approve()}
                     GhostBtn{text: "暂不" on_click: || deny()}
                 }
+                plan_ask := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
+                plan_ai := Label{width: Fill text: "" draw_text.color: #x1c1c1e draw_text.text_style: theme.font_bold{font_size: 12}}
+                plan_topics := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+                plan_limit := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+                plan_hosts := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
             }
             judge_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 6
                 new_batch: true show_bg: true draw_bg.color: #xfff6e5 draw_bg.border_radius: 12.0
@@ -1664,43 +2140,47 @@ HostedView{width: Fill height: Fill
             list := ScrollYView{width: Fill height: Fill flow: Down spacing: 8 padding: Inset{left: 14 right: 14 bottom: 12}
                 on_render: || {
                     if cover_on {
-                        View{width: Fill height: Fit flow: Down spacing: 6
-                            new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
-                            padding: Inset{top: 10 bottom: 12 left: 12 right: 12}
-                            View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 6
-                                Label{width: Fill text: "今日头版 · 视觉主编" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                                Label{text: cover_line() draw_text.color: secondary draw_text.text_style.font_size: 10}
-                            }
-                            Image{width: Fill height: 150 fit: ImageFit.CropToFill draw_bg.color: #xf2f2f5 draw_bg.border_radius: 8.0 src: http_resource(cover_url)}
-                            Label{width: Fill text: cover_head max_lines: 2 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 18}}
-                            View{width: Fill height: Fit flow: Right align: Align{y: 0.5}
-                                GhostBtn{text: "换一张头版" on_click: || cover_retry()}
+                        View{width: Fill height: 196 flow: Overlay
+                            new_batch: true
+                            Image{width: Fill height: Fill fit: ImageFit.CropToFill draw_bg.color: #x0b1020 draw_bg.border_radius: 14.0 src: http_resource(cover_url)}
+                            SolidView{width: Fill height: Fill draw_bg.color: #x07101ecc draw_bg.border_radius: 14.0}
+                            View{width: Fill height: Fill flow: Down spacing: 6 padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                                View{width: Fill height: Fit flow: Right spacing: 6 align: Align{y: 0.5}
+                                    Label{width: Fill text: "晨报卡 · AI EDITION" draw_text.color: #xffd39a draw_text.text_style: theme.font_bold{font_size: 10}}
+                                    Label{text: cover_line() draw_text.color: #xa9badb draw_text.text_style.font_size: 9}
+                                }
+                                View{width: Fill height: Fill}
+                                Label{width: Fill text: cover_head max_lines: 3 draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 21}}
+                                View{width: Fill height: Fit flow: Right align: Align{x: 1.0 y: 1.0}
+                                    DarkBtn{text: "换一张头版" on_click: || cover_retry()}
+                                }
                             }
                         }
                     } else if cover_state == "asking" || cover_state == "drawing" || cover_state == "failed" {
-                        View{width: Fill height: Fit flow: Down spacing: 4
-                            new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
-                            padding: Inset{top: 10 bottom: 10 left: 12 right: 12}
-                            Label{width: Fill text: "今日头版 · 视觉主编" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: cover_note max_lines: 3 draw_text.color: #x6b6b70 draw_text.text_style.font_size: 11}
+                        RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true draw_bg.color: #x0e1424 draw_bg.border_radius: 14.0
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            Label{width: Fill text: "今日头版 · 视觉主编" draw_text.color: #xffd39a draw_text.text_style: theme.font_bold{font_size: 11}}
+                            Label{width: Fill text: cover_note max_lines: 3 draw_text.color: #x9fb0d0 draw_text.text_style.font_size: 11}
                         }
                     }
-                    if show_rows().len() == 0 {
+                    let rows = show_rows()
+                    if rows.len() == 0 {
                         View{width: Fill height: 120 align: Align{x: 0.5 y: 0.5}
                             Label{text: empty_line() draw_text.color: secondary draw_text.text_style.font_size: 12}
                         }
                     }
-                    else for r in show_rows() {
+                    else for i r in rows {
                         GestureView{width: Fill height: Fit on_tap: |x, y| open_story(r)
                             let thumb = row_img(r)
                             if thumb != "" {
-                                RowCardImg{col.rm.text: row_meta(r) col.rt.text: r.title
+                                RowCardImg{col.rm.text: rank_text(i) + " · " + row_meta(r) col.rt.text: r.title
                                     col.rsu.text: row_sum(r) col.rsu.visible: row_sum(r) != ""
                                     col.rw.text: reason_of(r.id) col.rw.visible: reason_of(r.id) != ""
                                     col.rp.text: panel_mark(r.id) col.rp.visible: panel_mark(r.id) != ""
                                     rth.src: http_resource(thumb)}
                             } else {
-                                RowCard{rm.text: row_meta(r) rt.text: r.title
+                                RowCard{rm.text: rank_text(i) + " · " + row_meta(r) rt.text: r.title
                                     rsu.text: row_sum(r) rsu.visible: row_sum(r) != ""
                                     rw.text: reason_of(r.id) rw.visible: reason_of(r.id) != ""
                                     rp.text: panel_mark(r.id) rp.visible: panel_mark(r.id) != ""}
@@ -1709,8 +2189,8 @@ HostedView{width: Fill height: Fill
                     }
                 }
             }
-            View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 14 right: 14 bottom: 12}
-                sel_line := Label{width: Fill text: "点任意条目，在卡片里读这条新闻的来龙去脉" draw_text.color: secondary draw_text.text_style.font_size: 11}
+            View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 14 right: 14 bottom: 60}
+                sel_line := Label{width: Fill text: "点任意条目，在卡片里读这条新闻的来龙去脉；想让主编动手，就点右下角的「AI 主编」" draw_text.color: secondary draw_text.text_style.font_size: 11}
                 View{width: Fill height: 44 flow: Right align: Align{y: 0.5}
                     GhostBtn{text: "重新开始" on_click: || restart()}
                 }
@@ -1726,7 +2206,7 @@ HostedView{width: Fill height: Fill
                 story_title := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 18}}
                 story_meta := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
             }
-            ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 bottom: 24}
+            ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 bottom: 300}
                 art_pane := View{width: Fill height: Fit flow: Down
                     on_render: || {
                         if art_on {
@@ -1788,6 +2268,63 @@ HostedView{width: Fill height: Fill
                 }
             }
         }
+        ag_dock := View{width: Fill height: Fill flow: Down align: Align{x: 0.5 y: 1.0}
+            ag_panel := RoundedView{visible: false width: Fill height: Fit flow: Down spacing: 6
+                new_batch: true draw_bg.color: #x0e1424 draw_bg.border_radius: 14.0
+                padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                View{width: Fill height: Fit flow: Right spacing: 8 align: Align{y: 0.5}
+                    Label{text: "AI 主编 · 常驻" draw_text.color: #xffd39a draw_text.text_style: theme.font_bold{font_size: 12}}
+                    ag_note := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x9fb0d0 draw_text.text_style.font_size: 10}
+                    BarBtn{text: "清空" on_click: || ag_clear()}
+                    BarBtn{text: "收起" on_click: || ag_toggle()}
+                }
+                ag_caps := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x6c7d9e draw_text.text_style.font_size: 9}
+                ag_log_box := ScrollYView{width: Fill height: 168 flow: Down spacing: 4
+                    on_render: || {
+                        if ag_log.len() == 0 {
+                            Label{width: Fill text: "试着对我说：只看芯片和 AI，生成今天的晨报。" draw_text.color: #x7c8db0 draw_text.text_style.font_size: 11}
+                        }
+                        else for e in ag_log {
+                            if e.who == "me" {
+                                View{width: Fill height: Fit flow: Right
+                                    RoundedView{width: Fit height: Fit flow: Down
+                                        new_batch: true draw_bg.color: #x1d2a45 draw_bg.border_radius: 10.0
+                                        padding: Inset{top: 7 bottom: 7 left: 10 right: 10}
+                                        Label{width: Fit text: e.text max_lines: 3 draw_text.color: #xe8eefc draw_text.text_style.font_size: 12}
+                                    }
+                                }
+                            }
+                            else if e.who == "tool" {
+                                Label{width: Fill text: e.text max_lines: 2 draw_text.color: #x8fe0b0 draw_text.text_style.font_size: 10}
+                            }
+                            else {
+                                View{width: Fill height: Fit flow: Right spacing: 6 align: Align{y: 0.0}
+                                    Label{text: "主编" draw_text.color: #xffd39a draw_text.text_style: theme.font_bold{font_size: 10}}
+                                    Label{width: Fill text: e.text max_lines: 3 draw_text.color: #xdbe4f7 draw_text.text_style.font_size: 12}
+                                }
+                            }
+                        }
+                    }
+                }
+                View{width: Fill height: Fit flow: Right spacing: 6
+                    ag_in := TextInput{width: Fill height: 38 empty_text: "对主编说一句话…" on_change: |t| ag_set_draft(t)
+                        draw_bg +: {color: #x18213a color_hover: #x18213a color_focus: #x1c2744 color_empty: #x18213a
+                            border_color: #x28345a border_color_hover: #x28345a border_color_focus: #xe0245e border_color_empty: #x28345a
+                            border_radius: 10.0}
+                        draw_text +: {color: #xe8eefc color_hover: #xe8eefc color_focus: #xe8eefc color_empty: #x6c7d9e color_empty_hover: #x6c7d9e}
+                    }
+                    PrimaryBtn{text: "发送" on_click: || ag_send()}
+                }
+                View{width: Fill height: Fit flow: Right spacing: 6
+                    ChipBtn{text: "生成今天这份" on_click: || ag_say("生成今天这份晨报")}
+                    ChipBtn{text: "只看 AI 和芯片" on_click: || ag_say("只看 AI 和芯片，生成今天的晨报")}
+                    ChipBtn{text: "这一期讲了什么" on_click: || ag_say("这一期讲了什么？")}
+                }
+            }
+            View{width: Fill height: Fit flow: Right align: Align{x: 1.0} spacing: 8 padding: Inset{left: 12 right: 12 bottom: 12 top: 4}
+                ag_pill := PillBtn{text: "● AI 主编" on_click: || ag_toggle()}
+            }
+        }
         cg := View{width: Fill height: Fill show_bg: true
             new_batch: true
             draw_bg +: {
@@ -1797,6 +2334,8 @@ HostedView{width: Fill height: Fill
                     let cgP = self.pos * cgSz
                     let cgCx = cgSz.x * 0.5
                     let cgCy = cgSz.y * 0.5
+                    let cgRelX = cgP.x - cgSz.x * 0.5
+                    let cgRelY = cgP.y - cgSz.y * 0.5
                     let cgInkA = #x07090f
                     let cgInkB = #x0d1220
                     let cgGrid = #x223050
@@ -1846,6 +2385,13 @@ HostedView{width: Fill height: Fill
                     let cgA3 = 5.2 + cgT * 0.62
                     let cgM3 = (1.0 - smoothstep(0.0 2.4 length(cgP - vec2(cgCx + cos(cgA3) * cgR3 * 1.35, cgCy + sin(cgA3) * cgR3)))) * (0.38 + 0.62 * cgPd)
                     cgCol = cgCol.mix(cgDawn, cgM3 * 0.85)
+
+                    let cgOrb = smoothstep(0.30 1.20 cgT) * (1.0 - smoothstep(2.70 3.10 cgT))
+                    let cgCxr = cgRelX * cos(0.0 - 0.42) - cgRelY * sin(0.0 - 0.42)
+                    let cgCyr = cgRelX * sin(0.0 - 0.42) + cgRelY * cos(0.0 - 0.42)
+                    let cgRing = abs(length(vec2(cgCxr / 196.0, cgCyr / 64.0)) - 1.0)
+                    let cgOrbI = (1.0 - smoothstep(0.0 0.055 cgRing)) * cgOrb
+                    cgCol = cgCol.mix(cgDawn, cgOrbI * 0.55)
 
                     let cgSlY = cgSz.y * fract(cgT * 0.14 + 0.05)
                     let cgSl = (1.0 - smoothstep(0.0 2.5 abs(cgP.y - cgSlY))) * (1.0 - smoothstep(2.90 3.35 cgT))
