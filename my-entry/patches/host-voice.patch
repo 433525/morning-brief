@@ -1,0 +1,1474 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index b4f8895..4a24bb1 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -924,6 +924,17 @@ dependencies = [
+  "makepad-live-id",
+ ]
+ 
++[[package]]
++name = "makepad-system-speech"
++version = "0.1.0"
++dependencies = [
++ "makepad-android-state",
++ "makepad-jni-sys",
++ "windows",
++ "windows-core",
++ "windows-future",
++]
++
+ [[package]]
+ name = "makepad-tsdf"
+ version = "0.1.0"
+@@ -1247,6 +1258,17 @@ dependencies = [
+  "octoscript-widgets",
+  "octosense-app-policy",
+  "octosense-appstore",
++ "octosense-llm-service",
++ "serde_json",
++]
++
++[[package]]
++name = "octosense-llm-service"
++version = "0.1.0"
++dependencies = [
++ "makepad-network",
++ "makepad-system-speech",
++ "octosense-appstore",
+  "serde_json",
+ ]
+ 
+diff --git a/Cargo.toml b/Cargo.toml
+index 85a4a91..eb86410 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -21,6 +21,7 @@ members = [
+     "crates/card-host",
+     "crates/app-host",
+     "crates/app-hub-app",
++    "crates/llm-service",
+ ]
+ 
+ # Builds resolve the pinned sources from the prepared sibling checkouts, as
+diff --git a/crates/card-host/Cargo.toml b/crates/card-host/Cargo.toml
+index 70ce301..359d16c 100644
+--- a/crates/card-host/Cargo.toml
++++ b/crates/card-host/Cargo.toml
+@@ -24,6 +24,7 @@ octoscript-makepad = { git = "https://github.com/OctoSense-org/Octoscript-Makepa
+ octoscript-widgets = { git = "https://github.com/OctoSense-org/Octoscript-Makepad.git", rev = "b1596d9c2cee6e80cca9d27b1b0c2d57b9d28dd8" }
+ serde_json = "1"
+ octosense-appstore = { path = "../appstore" }
++octosense-llm-service = { path = "../llm-service" }
+ 
+ [[bin]]
+ name = "card-host"
+diff --git a/crates/card-host/src/host.rs b/crates/card-host/src/host.rs
+index e0af835..648cfb0 100644
+--- a/crates/card-host/src/host.rs
++++ b/crates/card-host/src/host.rs
+@@ -144,6 +144,58 @@ fn register_card_vocabulary() {
+     register_splash_isolate_mod(makepad_widgets::splash::register_agent_module);
+ }
+ 
++/// What the shell can do for a contained app: the host services. Registered
++/// once, process-wide, and offered only to apps whose manifest grants the
++/// family.
++///
++/// `llm` is language models and voice. The key lives in this process's
++/// environment and stays here; a card asks a question and gets an answer
++/// back, and the speaker and the microphone belong to this process too.
++fn register_host_services() {
++    octosense_llm_service::register();
++    let status = octosense_llm_service::Config::from_env();
++    if status.ready() {
++        log!(
++            "card-host: llm service ready — {} at {} (key from {})",
++            status.model,
++            status.endpoint,
++            status.source,
++        );
++    } else {
++        log!(
++            "card-host: llm service registered without a key — set OCTOS_LLM_KEY to answer cards that ask for one",
++        );
++    }
++}
++
++/// One audio output, installed once, reading whatever the voice service has
++/// queued. A card cannot hold a device; `llm.speak` renders a sentence and
++/// this callback is where it becomes sound.
++fn install_audio_output(cx: &mut Cx) {
++    cx.audio_output(0, move |info, output| {
++        output.zero();
++        let frames = output.frame_count();
++        let channels = output.channel_count();
++        if frames == 0 || channels == 0 {
++            return;
++        }
++        let player = octosense_llm_service::voice::player();
++        if !player.state().playing {
++            return;
++        }
++        let mut mono = vec![0.0f32; frames];
++        player.fill(&mut mono, info.sample_rate.max(1.0));
++        // The engine renders mono; every output channel gets the same frames.
++        let mut interleaved = vec![0.0f32; frames * channels];
++        for frame in 0..frames {
++            for channel in 0..channels {
++                interleaved[frame * channels + channel] = mono[frame];
++            }
++        }
++        output.copy_from_interleaved(channels, &interleaved);
++    });
++}
++
+ impl App {
+     fn mount(&mut self, cx: &mut Cx) {
+         let Some(args) = ARGS.get() else {
+@@ -229,8 +281,15 @@ impl AppMain for App {
+         if !self.mounted {
+             self.mounted = true;
+             register_card_vocabulary();
++            register_host_services();
++            install_audio_output(cx);
+             self.mount(cx);
+         }
++        // The speakers this process may use, handed over by the platform once
++        // they are known; the voice service's queue plays through them.
++        if let Event::AudioDevices(devices) = event {
++            cx.use_audio_outputs(&devices.default_output());
++        }
+         self.ui.handle_event(cx, event, &mut Scope::empty());
+         // Host services (a sheet the service raises, answers from its
+         // workers), exactly as the Card runner does.
+diff --git a/crates/llm-service/Cargo.toml b/crates/llm-service/Cargo.toml
+new file mode 100644
+index 0000000..3f07e4b
+--- /dev/null
++++ b/crates/llm-service/Cargo.toml
+@@ -0,0 +1,20 @@
++# octosense-llm-service — the `llm` host service.
++#
++# Language models as a service the shell offers to contained apps. The app
++# asks a question and gets an answer; the key stays with the host, in this
++# process, and never reaches the app.
++[package]
++name = "octosense-llm-service"
++version = "0.1.0"
++edition = "2021"
++license = "Apache-2.0"
++publish = false
++description = "The `llm` host service: language models for contained apps, the key kept by the host"
++
++[dependencies]
++octosense-appstore = { path = "../appstore" }
++serde_json = "1"
++makepad-network = { path = "../../../makepad/platform/network" }
++# The OS's own speech engines (Windows.Media.SpeechSynthesis / SpeechRecognition,
++# Apple Speech, Android SpeechRecognizer/TextToSpeech). No models, no network.
++makepad-system-speech = { path = "../../../makepad/libs/system_speech" }
+diff --git a/crates/llm-service/src/chat.rs b/crates/llm-service/src/chat.rs
+new file mode 100644
+index 0000000..9b0dc30
+--- /dev/null
++++ b/crates/llm-service/src/chat.rs
+@@ -0,0 +1,392 @@
++//! One conversation with an OpenAI-compatible endpoint: the request body,
++//! the reply, and the small pieces of tidying that make a model's answer
++//! usable by an app.
++//!
++//! Two things are taken out of a raw answer before an app sees it. A
++//! reasoning preamble (`<think>…</think>` and its relatives) is split off
++//! and returned separately, so an app can show what the model worked
++//! through without mixing it into the answer. And when the caller asked for
++//! JSON, the first well-formed object is what comes back.
++use crate::config::Config;
++use makepad_network::blocking_http::{post_json, Limits, Request, Response};
++use serde_json::{json, Map, Value};
++use std::time::{Duration, Instant};
++
++/// The tags a model may wrap its working in. The first pair that matches
++/// wins; an unclosed one runs to the end of the answer.
++const THINK_TAGS: [(&str, &str); 3] = [("<think>", "</think>"), ("<thinking>", "</thinking>"), ("<redacted_thinking>", "</redacted_thinking>")];
++
++/// A ceiling on how much the caller may send at once, so a runaway app
++/// cannot turn the host into a proxy for arbitrary traffic.
++const MAX_MESSAGES: usize = 16;
++const MAX_MESSAGE_CHARS: usize = 8_000;
++
++pub struct ChatRequest {
++    pub messages: Vec<Value>,
++    pub model: String,
++    pub temperature: Option<f64>,
++    pub max_tokens: u64,
++    pub as_json: bool,
++    pub schema: Option<Value>,
++}
++
++pub struct ChatOutcome {
++    pub value: Value,
++}
++
++impl ChatOutcome {
++    pub fn into_json(self) -> Value {
++        self.value
++    }
++}
++
++/// Run one chat call, retrying a shape failure once. A connection failure is
++/// not retried here: the caller decides, so a broken endpoint fails fast
++/// instead of holding the app for three timeouts.
++pub fn run(config: &Config, request: &ChatRequest) -> Result<ChatOutcome, String> {
++    let started = Instant::now();
++    let mut attempts = 0u32;
++    let mut last_shape_error = String::new();
++    loop {
++        attempts += 1;
++        let mut body = base_body(request);
++        if attempts > 1 && !last_shape_error.is_empty() {
++            // The second try tells the model, in the same conversation,
++            // what was wrong with the first answer.
++            let repair = format!(
++                "Your previous answer could not be used: {last_shape_error}. Reply with the JSON value alone, no prose, no fences."
++            );
++            if let Some(messages) = body.get_mut("messages").and_then(|v| v.as_array_mut()) {
++                messages.push(json!({"role": "user", "content": repair}));
++            }
++        }
++        let response = post_json(build_request(config, &body)?).map_err(|error| error.to_string())?;
++        let envelope = read_envelope(&response, config)?;
++        let choice = envelope
++            .get("choices")
++            .and_then(|v| v.as_array())
++            .and_then(|list| list.first())
++            .cloned()
++            .ok_or("the model returned no choices")?;
++        let raw = choice
++            .get("message")
++            .and_then(|m| m.get("content"))
++            .and_then(|v| v.as_str())
++            .unwrap_or("")
++            .to_string();
++        let (text, reasoning) = split_reasoning(&raw);
++        let usage = envelope.get("usage").cloned().unwrap_or_else(|| json!({}));
++        let finish = choice.get("finish_reason").and_then(|v| v.as_str()).unwrap_or("");
++        let model_used = envelope.get("model").and_then(|v| v.as_str()).unwrap_or(&config.model).to_string();
++        let elapsed = started.elapsed().as_millis() as u64;
++
++        let answer = if request.as_json {
++            match extract_json(&text) {
++                Some(value) => Some(value),
++                None => {
++                    last_shape_error = "it was not JSON".to_string();
++                    None
++                }
++            }
++        } else {
++            Some(Value::String(text.clone()))
++        };
++
++        let Some(answer) = answer else {
++            if attempts < 2 {
++                continue;
++            }
++            return Err(format!("the model did not answer with usable JSON: {last_shape_error}"));
++        };
++
++        if let Some(schema) = &request.schema {
++            if let Err(problem) = check_schema(schema, &answer) {
++                if attempts < 2 {
++                    last_shape_error = problem;
++                    continue;
++                }
++                return Err(format!("the model's JSON did not match the schema: {last_shape_error}"));
++            }
++        }
++
++        let value = json!({
++            "text": text,
++            "reasoning": reasoning,
++            "data": answer,
++            "model": model_used,
++            "finish_reason": finish,
++            "usage": {
++                "prompt_tokens": usage.get("prompt_tokens").cloned().unwrap_or(json!(0)),
++                "completion_tokens": usage.get("completion_tokens").cloned().unwrap_or(json!(0)),
++                "total_tokens": usage.get("total_tokens").cloned().unwrap_or(json!(0)),
++            },
++            "elapsed_ms": elapsed,
++            "attempts": attempts,
++        });
++        return Ok(ChatOutcome { value });
++    }
++}
++
++fn base_body(request: &ChatRequest) -> Value {
++    let mut body = Map::new();
++    body.insert("model".into(), json!(request.model));
++    body.insert("messages".into(), Value::Array(request.messages.clone()));
++    body.insert("max_tokens".into(), json!(request.max_tokens));
++    if let Some(temperature) = request.temperature {
++        body.insert("temperature".into(), json!(temperature));
++    }
++    Value::Object(body)
++}
++
++fn build_request(config: &Config, body: &Value) -> Result<Request, String> {
++    let url = format!("{}/chat/completions", config.endpoint.trim_end_matches('/'));
++    let bytes = serde_json::to_vec(body).map_err(|_| "cannot encode the request".to_string())?;
++    let limits = Limits {
++        total_timeout: Duration::from_secs(config.timeout),
++        max_body_bytes: 8 * 1024 * 1024,
++        ..Default::default()
++    };
++    Request::post(url)
++        .bearer(&config.key)
++        .map_err(|error| error.to_string())?
++        .json_body(bytes)
++        .map_err(|error| error.to_string())
++        .map(|request| request.limits(limits))
++}
++
++/// An answer may be an `error` object instead of a completion; and the body
++/// may carry a key by accident, so nothing is echoed before scrubbing.
++fn read_envelope(response: &Response, config: &Config) -> Result<Value, String> {
++    let text = String::from_utf8_lossy(&response.body).to_string();
++    if response.status != 200 {
++        let excerpt: String = text.chars().take(300).collect();
++        return Err(format!("the endpoint answered {}: {}", response.status, scrub(&excerpt, config)));
++    }
++    let value: Value = serde_json::from_str(&text).map_err(|_| "the endpoint's answer was not JSON".to_string())?;
++    if let Some(error) = value.get("error") {
++        let message = error.get("message").and_then(|v| v.as_str()).unwrap_or("the endpoint refused the call");
++        return Err(scrub(message, config));
++    }
++    Ok(value)
++}
++
++/// A model's answer is for a person; a key in it is a leak. It never leaves
++/// the service.
++fn scrub(text: &str, config: &Config) -> String {
++    let mut out = text.to_string();
++    if !config.key.is_empty() {
++        out = out.replace(&config.key, "…");
++    }
++    while let Some(at) = out.find("sk-") {
++        let tail = out[at..]
++            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ',' | '}' | ')' | '\u{201c}' | '\u{201d}'))
++            .unwrap_or(out.len() - at);
++        out.replace_range(at..at + tail, "\u{2026}");
++    }
++    out
++}
++
++/// Split working from answer. Everything inside a reasoning tag comes back
++/// as `reasoning`; the rest is the answer a person reads.
++pub fn split_reasoning(content: &str) -> (String, String) {
++    let mut text = String::new();
++    let mut reasoning = String::new();
++    let mut rest = content;
++    loop {
++        let mut earliest: Option<(usize, &str, &str)> = None;
++        for (open, close) in THINK_TAGS {
++            if let Some(at) = rest.find(open) {
++                if earliest.map(|(best, _, _)| at < best).unwrap_or(true) {
++                    earliest = Some((at, open, close));
++                }
++            }
++        }
++        let Some((at, open, close)) = earliest else {
++            text.push_str(rest);
++            break;
++        };
++        let after = &rest[at + open.len()..];
++        let Some(end) = after.find(close) else {
++            text.push_str(rest);
++            break;
++        };
++        text.push_str(&rest[..at]);
++        reasoning.push_str(&after[..end]);
++        reasoning.push('\n');
++        rest = &after[end + close.len()..];
++    }
++    (text.trim().to_string(), reasoning.trim().to_string())
++}
++
++/// The first JSON object in a model's answer: sometimes it is the whole
++/// answer, sometimes it is inside a fence, sometimes there is a sentence
++/// around it.
++pub fn extract_json(text: &str) -> Option<Value> {
++    let trimmed = text.trim();
++    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
++        return Some(value);
++    }
++    let unfenced = strip_fences(trimmed);
++    if unfenced != trimmed {
++        if let Ok(value) = serde_json::from_str::<Value>(unfenced.trim()) {
++            return Some(value);
++        }
++    }
++    let start = unfenced.find('[').into_iter().chain(unfenced.find('{')).min()?;
++    let open = unfenced.as_bytes()[start];
++    let close = if open == b'[' { b']' } else { b'}' };
++    let end = unfenced.rfind(close as char)?;
++    if end <= start {
++        return None;
++    }
++    serde_json::from_str::<Value>(&unfenced[start..=end]).ok()
++}
++
++fn strip_fences(text: &str) -> &str {
++    let Some(at) = text.find("```") else {
++        return text;
++    };
++    let after = &text[at + 3..];
++    let after = after.strip_prefix("json").unwrap_or(after);
++    let after = after.strip_prefix("JSON").unwrap_or(after);
++    match after.find("```") {
++        Some(end) => &after[..end],
++        None => after,
++    }
++}
++
++/// A small, useful subset of JSON Schema: the parts an app's answer list
++/// actually leans on. A schema that asks for more than this is not treated
++/// as a failure.
++fn check_schema(schema: &Value, value: &Value) -> Result<(), String> {
++    let kind = schema.get("type").and_then(|v| v.as_str()).unwrap_or("");
++    match kind {
++        "object" => {
++            let Some(object) = value.as_object() else {
++                return Err("the answer was not a JSON object".into());
++            };
++            if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
++                for key in required.iter().filter_map(|v| v.as_str()) {
++                    if !object.contains_key(key) {
++                        return Err(format!("it has no {key:?}"));
++                    }
++                }
++            }
++            if let Some(properties) = schema.get("properties").and_then(|v| v.as_object()) {
++                for (key, sub) in properties {
++                    if let Some(field) = object.get(key) {
++                        check_schema(sub, field)?;
++                    }
++                }
++            }
++        }
++        "array" => {
++            let Some(items) = value.as_array() else {
++                return Err("the answer was not a JSON list".into());
++            };
++            if let Some(count) = schema.get("minItems").and_then(|v| v.as_u64()) {
++                if items.len() < count as usize {
++                    return Err(format!("it has {} items, fewer than {count}", items.len()));
++                }
++            }
++            if let Some(item_schema) = schema.get("items") {
++                for item in items {
++                    check_schema(item_schema, item)?;
++                }
++            }
++        }
++        "string" => {
++            if !value.is_string() {
++                return Err("a field was not text".into());
++            }
++        }
++        "integer" | "number" => {
++            if !value.is_number() {
++                return Err("a field was not a number".into());
++            }
++        }
++        "boolean" => {
++            if !value.is_boolean() {
++                return Err("a field was not a yes-or-no".into());
++            }
++        }
++        _ => {}
++    }
++    Ok(())
++}
++
++/// Build a message list from `{system, prompt}` or a ready `messages`.
++pub fn messages_from_args(args: &Value) -> Result<Vec<Value>, String> {
++    if let Some(list) = args.get("messages").and_then(|v| v.as_array()) {
++        let mut out = Vec::new();
++        for message in list.iter().take(MAX_MESSAGES) {
++            let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("user");
++            let content = message.get("content").and_then(|v| v.as_str()).unwrap_or("");
++            if content.is_empty() {
++                continue;
++            }
++            let content: String = content.chars().take(MAX_MESSAGE_CHARS).collect();
++            out.push(json!({"role": role, "content": content}));
++        }
++        if out.is_empty() {
++            return Err("messages carried no content".into());
++        }
++        return Ok(out);
++    }
++    let prompt = args.get("prompt").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
++    if prompt.is_empty() {
++        return Err("the call carried no prompt".into());
++    }
++    let mut out = Vec::new();
++    if let Some(system) = args.get("system").and_then(|v| v.as_str()) {
++        if !system.trim().is_empty() {
++            out.push(json!({"role": "system", "content": system.trim()}));
++        }
++    }
++    out.push(json!({
++        "role": "user",
++        "content": prompt.chars().take(MAX_MESSAGE_CHARS).collect::<String>(),
++    }));
++    Ok(out)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn working_is_split_from_the_answer() {
++        let (text, reasoning) = split_reasoning("<think>weigh the sources</think>The line held.");
++        assert_eq!(text, "The line held.");
++        assert_eq!(reasoning, "weigh the sources");
++    }
++
++    #[test]
++    fn a_tag_named_in_the_answer_is_left_alone() {
++        let (text, reasoning) = split_reasoning("Write <think> to start.");
++        assert_eq!(text, "Write <think> to start.");
++        assert_eq!(reasoning, "");
++    }
++
++    #[test]
++    fn json_is_found_whole_fenced_or_embedded() {
++        assert_eq!(extract_json("{\"a\": 1}").unwrap()["a"], 1);
++        assert_eq!(extract_json("```json\n{\"a\": 2}\n```").unwrap()["a"], 2);
++        assert_eq!(extract_json("Here it is: {\"a\": 3} — done.").unwrap()["a"], 3);
++        assert_eq!(extract_json("[{\"a\": 4}]").unwrap()[0]["a"], 4);
++        assert!(extract_json("no json here").is_none());
++    }
++
++    #[test]
++    fn a_schema_says_what_it_needs() {
++        let schema = json!({
++            "type": "object",
++            "required": ["items"],
++            "properties": {"items": {"type": "array", "minItems": 2, "items": {"type": "string"}}},
++        });
++        assert!(check_schema(&schema, &json!({"items": ["a", "b"]})).is_ok());
++        assert!(check_schema(&schema, &json!({"items": ["a"]})).is_err());
++        assert!(check_schema(&schema, &json!({})).is_err());
++        assert!(check_schema(&schema, &json!({"items": [1, 2]})).is_err());
++    }
++}
+diff --git a/crates/llm-service/src/config.rs b/crates/llm-service/src/config.rs
+new file mode 100644
+index 0000000..2059633
+--- /dev/null
++++ b/crates/llm-service/src/config.rs
+@@ -0,0 +1,172 @@
++//! Where the model connection is configured: the endpoint, the model, and
++//! the key.
++//!
++//! The key is read from the environment of the process that runs the host
++//! (or, failing that, from the developer machine's own tool config), and it
++//! is never serialized into a status answer, a log line or an error. An app
++//! sees only whether a connection is configured.
++use serde_json::{json, Value};
++use std::path::PathBuf;
++
++pub const DEFAULT_ENDPOINT: &str = "https://api.anmoxuan.xyz/v1";
++pub const DEFAULT_MODEL: &str = "MiniMax-M3";
++pub const DEFAULT_TIMEOUT_SECS: u64 = 60;
++
++/// What the host knows about the model connection. `key` is deliberately
++/// absent from every method that serializes this.
++pub struct Config {
++    pub endpoint: String,
++    pub model: String,
++    pub key: String,
++    /// Where the key came from: `env:NAME`, `file:/path`, or empty.
++    pub source: String,
++    /// Models the host will offer; empty means "ask the endpoint".
++    pub models: Vec<String>,
++    pub timeout: u64,
++}
++
++impl Config {
++    /// Read the environment once. The order matters: a key placed in this
++    /// process's environment beats whatever a developer tool happens to
++    /// have on disk.
++    pub fn from_env() -> Config {
++        let env_keys = ["OCTOS_LLM_KEY", "MINIMAX_API_KEY", "OPENAI_API_KEY"];
++        let mut key = String::new();
++        let mut source = String::new();
++        for name in env_keys {
++            if let Ok(value) = std::env::var(name) {
++                if !value.trim().is_empty() {
++                    key = value.trim().to_string();
++                    source = format!("env:{name}");
++                    break;
++                }
++            }
++        }
++        if key.is_empty() {
++            if let Some((value, path)) = key_from_tool_config() {
++                key = value;
++                source = format!("file:{}", path.display());
++            }
++        }
++        let timeout = std::env::var("OCTOS_LLM_TIMEOUT")
++            .ok()
++            .and_then(|value| value.trim().parse::<u64>().ok())
++            .filter(|secs| *secs >= 5)
++            .unwrap_or(DEFAULT_TIMEOUT_SECS);
++        Config {
++            endpoint: std::env::var("OCTOS_LLM_BASE_URL")
++                .ok()
++                .map(|value| value.trim().to_string())
++                .filter(|value| !value.is_empty())
++                .unwrap_or_else(|| DEFAULT_ENDPOINT.to_string()),
++            model: std::env::var("OCTOS_LLM_MODEL")
++                .ok()
++                .map(|value| value.trim().to_string())
++                .filter(|value| !value.is_empty())
++                .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
++            models: std::env::var("OCTOS_LLM_MODELS")
++                .ok()
++                .map(|value| {
++                    value
++                        .split([',', ';', ' '])
++                        .map(str::trim)
++                        .filter(|name| !name.is_empty())
++                        .map(str::to_string)
++                        .collect::<Vec<_>>()
++                })
++                .unwrap_or_default(),
++            key,
++            source,
++            timeout,
++        }
++    }
++
++    pub fn ready(&self) -> bool {
++        !self.key.is_empty()
++    }
++
++    /// What an app is allowed to see: whether the connection works, and
++    /// nothing that could be used to make a call without the host.
++    pub fn status_json(&self) -> Value {
++        json!({
++            "ready": self.ready(),
++            "provider": "openai-compatible",
++            "endpoint": self.endpoint,
++            "model": self.model,
++            "key_source": self.source,
++            "key_masked": mask(&self.key),
++            "timeout_secs": self.timeout,
++            "models": self.models,
++            "note": if self.ready() {
++                "the host holds a key for this connection"
++            } else {
++                "no key: set OCTOS_LLM_KEY in the environment that starts the host"
++            },
++        })
++    }
++}
++
++/// Enough of a key to tell two apart, not enough to use one.
++fn mask(key: &str) -> String {
++    if key.is_empty() {
++        return String::new();
++    }
++    let tail: String = key
++        .chars()
++        .rev()
++        .take(4)
++        .collect::<Vec<_>>()
++        .into_iter()
++        .rev()
++        .collect();
++    format!("…{tail}")
++}
++
++/// A last resort for a developer machine: the Codex tool keeps its own
++/// endpoint credentials in `~/.codex/auth.json`. Only used when no
++/// environment key is set.
++fn key_from_tool_config() -> Option<(String, PathBuf)> {
++    let home = std::env::var("USERPROFILE")
++        .or_else(|_| std::env::var("HOME"))
++        .ok()?;
++    let path = PathBuf::from(home).join(".codex").join("auth.json");
++    let text = std::fs::read_to_string(&path).ok()?;
++    let value: Value = serde_json::from_str(&text).ok()?;
++    for name in ["OPENAI_API_KEY", "api_key"] {
++        if let Some(key) = value.get(name).and_then(|v| v.as_str()) {
++            if !key.trim().is_empty() {
++                return Some((key.trim().to_string(), path));
++            }
++        }
++    }
++    None
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn a_mask_shows_a_tail_and_no_body() {
++        let masked = mask("sk-abcdef123456");
++        assert_eq!(masked, "…3456");
++        assert!(!masked.contains("abcdef"));
++        assert_eq!(mask(""), "");
++    }
++
++    #[test]
++    fn status_never_carries_the_key() {
++        let config = Config {
++            endpoint: DEFAULT_ENDPOINT.into(),
++            model: DEFAULT_MODEL.into(),
++            key: "sk-secret-value-9876".into(),
++            source: "env:OCTOS_LLM_KEY".into(),
++            models: vec![],
++            timeout: 60,
++        };
++        let status = config.status_json().to_string();
++        assert!(status.contains("…9876"));
++        assert!(!status.contains("secret-value"));
++        assert!(config.ready());
++    }
++}
+diff --git a/crates/llm-service/src/lib.rs b/crates/llm-service/src/lib.rs
+new file mode 100644
+index 0000000..9bb6c99
+--- /dev/null
++++ b/crates/llm-service/src/lib.rs
+@@ -0,0 +1,325 @@
++//! The `llm` host service: language models for contained apps, the key kept
++//! by the host.
++//!
++//! A script app granted `llm` calls, through `host.request`:
++//!
++//! | method | args | answer |
++//! |---|---|---|
++//! | `llm.status` | – | `{ready, provider, endpoint, model, key_masked, models[], note}` |
++//! | `llm.models` | – | `{models: [{id, label}], source}` the endpoint or the host config offers |
++//! | `llm.chat` | `{prompt?, system?, messages?, model?, temperature?, max_tokens?, as_json?, schema?, label?}` | `{text, reasoning, data, model, usage, elapsed_ms, attempts}` |
++//! | `llm.speech` | – | `{tts: {available, engine, voices[]}, stt: {available, engine, caps}}` the OS speech engines |
++//! | `llm.speak` | `{text, voice?, lang?, rate?}` | `{ok, seconds, sample_rate, voice, engine, render_ms}` — starts playing in the host |
++//! | `llm.speaking` | – | `{playing, seconds, voice}` |
++//! | `llm.listen_start` | `{language?}` | `{ok, language, engine}` — opens the microphone |
++//! | `llm.listen_poll` | – | `{live, listening, events: [{kind, text?, v?}]}` — `partial` / `final` / `level` / `error` / `ended` |
++//! | `llm.listen_stop` | – | `{ok}` — closes the microphone |
++//!
++//! The voice methods are the same contract as the rest of this service: the
++//! app asks, the host works. The microphone and the speaker belong to the
++//! host; a card gets transcripts and a voice, never a device.
++//!
++//! The app never sees a key, an endpoint credential or a socket. It asks a
++//! question; the host holds the connection. Calls run on a worker thread, so
++//! a slow model never freezes the card that asked.
++//!
++//! What the host knows about its own connection:
++//!
++//! | variable | meaning |
++//! |---|---|
++//! | `OCTOS_LLM_KEY` | the key (falls back to `MINIMAX_API_KEY`, `OPENAI_API_KEY`, then the developer machine's own tool config) |
++//! | `OCTOS_LLM_BASE_URL` | an OpenAI-compatible base, default [`config::DEFAULT_ENDPOINT`] |
++//! | `OCTOS_LLM_MODEL` | the default model, default [`config::DEFAULT_MODEL`] |
++//! | `OCTOS_LLM_MODELS` | a comma-separated list to offer without asking the endpoint |
++//! | `OCTOS_LLM_TIMEOUT` | seconds for one call, default 60 |
++//!
++//! Every call is appended to `<host_dir>/llm/calls.jsonl`: what was asked,
++//! what came back, how long it took and what it cost in tokens. Nothing in
++//! that file is a key.
++mod chat;
++mod config;
++pub mod voice;
++
++pub use config::{Config, DEFAULT_ENDPOINT, DEFAULT_MODEL};
++
++use chat::ChatRequest;
++use octosense_appstore::services::{HostService, Replier, ServiceCall, ServiceHost};
++use serde_json::{json, Value};
++use std::path::{Path, PathBuf};
++use std::sync::{Arc, Mutex};
++
++/// A worker thread for slow work, so the card's UI never waits on a model.
++fn work(f: impl FnOnce() + Send + 'static) {
++    std::thread::spawn(f);
++}
++
++/// Offer the service to every app granted `llm`, reading the connection from
++/// this process's environment.
++pub fn register() {
++    register_with(Config::from_env());
++}
++
++pub fn register_with(config: Config) {
++    octosense_appstore::services::register_host_service(Box::new(LlmService {
++        config: Arc::new(config),
++        models: Arc::new(Mutex::new(None)),
++    }));
++}
++
++pub struct LlmService {
++    config: Arc<Config>,
++    /// Models discovered from the endpoint, kept once found.
++    models: Arc<Mutex<Option<Vec<String>>>>,
++}
++
++/// A ceiling on how many tokens one card may ask for, so a stray number
++/// cannot turn a friendly demo into a bill.
++const MAX_TOKENS_CEILING: u64 = 2_048;
++
++impl HostService for LlmService {
++    fn family(&self) -> &'static str {
++        "llm"
++    }
++
++    fn call(&mut self, call: ServiceCall, reply: Replier, _host: &mut dyn ServiceHost) {
++        match call.method() {
++            "status" => reply.send(Ok(self.status())),
++            "models" => self.models(call, reply),
++            "chat" | "complete" => self.chat(call, reply),
++            // Voice: the OS engines, on the host's own threads. Synthesis
++            // blocks its worker, so it never holds the card's UI.
++            "speech" => reply.send(Ok(voice::speech_status())),
++            "speaking" => reply.send(Ok(voice::speaking())),
++            "speak" => {
++                let args = call.args.clone();
++                work(move || reply.send(voice::speak(&args)));
++            }
++            "listen_start" => {
++                let args = call.args.clone();
++                work(move || reply.send(voice::listen_start(&args)));
++            }
++            "listen_poll" => reply.send(Ok(voice::listen_poll())),
++            "listen_stop" => reply.send(Ok(voice::listen_stop())),
++            other => reply.send(Err(format!("llm has no method {other:?}"))),
++        }
++    }
++}
++
++impl LlmService {
++    fn status(&self) -> Value {
++        let mut status = self.config.status_json();
++        let known = self.models.lock().unwrap().clone().unwrap_or_default();
++        if let Some(object) = status.as_object_mut() {
++            if !known.is_empty() {
++                object.insert("models".into(), json!(known));
++            }
++        }
++        status
++    }
++
++    /// Ask the endpoint what it serves, and remember the answer.
++    fn models(&self, call: ServiceCall, reply: Replier) {
++        if !self.config.models.is_empty() {
++            let models = self.config.models.clone();
++            *self.models.lock().unwrap() = Some(models.clone());
++            return reply.send(Ok(models_json(&models, "host config")));
++        }
++        if let Some(known) = self.models.lock().unwrap().clone() {
++            return reply.send(Ok(models_json(&known, "the endpoint")));
++        }
++        let config = self.config.clone();
++        let cache = self.models.clone();
++        let store = CallLog::at(&call.host_dir);
++        work(move || {
++            let outcome = fetch_models(&config);
++            match outcome {
++                Ok(models) => {
++                    *cache.lock().unwrap() = Some(models.clone());
++                    store.append(&json!({
++                        "at": now(),
++                        "app": call.app_id,
++                        "method": "llm.models",
++                        "count": models.len(),
++                    }));
++                    reply.send(Ok(models_json(&models, "the endpoint")));
++                }
++                Err(error) => reply.send(Err(error)),
++            }
++        });
++    }
++
++    /// One conversation. Runs on a worker; the answer arrives when it is
++    /// ready, and the card keeps drawing until then.
++    fn chat(&self, call: ServiceCall, reply: Replier) {
++        let config = self.config.clone();
++        let store = CallLog::at(&call.host_dir);
++        let args = call.args.clone();
++        let app_id = call.app_id.clone();
++        work(move || {
++            let started = std::time::Instant::now();
++            let outcome = prepare(&config, &args).and_then(|request| {
++                chat::run(&config, &request).map(|outcome| (request, outcome))
++            });
++            match outcome {
++                Ok((request, outcome)) => {
++                    let answer = outcome.into_json();
++                    store.append(&json!({
++                        "at": now(),
++                        "app": app_id,
++                        "label": args.get("label").and_then(|v| v.as_str()).unwrap_or(""),
++                        "model": request.model,
++                        "asked": request.messages.len(),
++                        "chars_in": request.messages.iter().filter_map(|m| m.get("content")).filter_map(|v| v.as_str()).map(|s| s.chars().count()).sum::<usize>(),
++                        "chars_out": answer.get("text").and_then(|v| v.as_str()).map(|s| s.chars().count()).unwrap_or(0),
++                        "reasoning_chars": answer.get("reasoning").and_then(|v| v.as_str()).map(|s| s.chars().count()).unwrap_or(0),
++                        "usage": answer.get("usage"),
++                        "elapsed_ms": answer.get("elapsed_ms"),
++                        "attempts": answer.get("attempts"),
++                        "ok": true,
++                    }));
++                    reply.send(Ok(answer));
++                }
++                Err(error) => {
++                    store.append(&json!({
++                        "at": now(),
++                        "app": app_id,
++                        "label": args.get("label").and_then(|v| v.as_str()).unwrap_or(""),
++                        "elapsed_ms": started.elapsed().as_millis() as u64,
++                        "ok": false,
++                        "error": error,
++                    }));
++                    reply.send(Err(error));
++                }
++            }
++        });
++    }
++}
++
++/// Turn the call's arguments into a request the network layer can send.
++fn prepare(config: &Config, args: &Value) -> Result<ChatRequest, String> {
++    let messages = chat::messages_from_args(args)?;
++    let model = args
++        .get("model")
++        .and_then(|v| v.as_str())
++        .map(str::trim)
++        .filter(|name| !name.is_empty())
++        .unwrap_or(&config.model)
++        .to_string();
++    let max_tokens = args
++        .get("max_tokens")
++        .and_then(|v| v.as_u64())
++        .filter(|n| *n > 0)
++        .unwrap_or(700)
++        .min(MAX_TOKENS_CEILING);
++    let temperature = args.get("temperature").and_then(|v| v.as_f64());
++    let as_json = args.get("as_json").and_then(|v| v.as_bool()).unwrap_or(false);
++    let schema = args.get("schema").cloned().filter(|v| !v.is_null());
++    Ok(ChatRequest { messages, model, temperature, max_tokens, as_json, schema })
++}
++
++fn models_json(models: &[String], source: &str) -> Value {
++    json!({
++        "source": source,
++        "models": models.iter().map(|id| json!({"id": id, "label": id})).collect::<Vec<_>>(),
++    })
++}
++
++/// `GET /models`, the one call that tells us what the endpoint serves.
++fn fetch_models(config: &Config) -> Result<Vec<String>, String> {
++    use makepad_network::blocking_http::{request_no_redirect, Limits, Request};
++    let url = format!("{}/models", config.endpoint.trim_end_matches('/'));
++    let limits = Limits {
++        total_timeout: std::time::Duration::from_secs(20),
++        ..Default::default()
++    };
++    let request = Request::get(url)
++        .bearer(&config.key)
++        .map_err(|error| error.to_string())?
++        .limits(limits);
++    let response = request_no_redirect(request).map_err(|error| error.to_string())?;
++    if response.status != 200 {
++        return Err(format!("the endpoint answered {} when asked for its models", response.status));
++    }
++    let value: Value = serde_json::from_slice(&response.body)
++        .map_err(|_| "the endpoint's model list was not JSON".to_string())?;
++    let mut models: Vec<String> = value
++        .get("data")
++        .and_then(|v| v.as_array())
++        .map(|list| {
++            list.iter()
++                .filter_map(|item| item.get("id").and_then(|v| v.as_str()))
++                .map(str::to_string)
++                .collect()
++        })
++        .unwrap_or_default();
++    models.sort();
++    if models.is_empty() {
++        return Err("the endpoint listed no models".into());
++    }
++    Ok(models)
++}
++
++fn now() -> String {
++    let secs = std::time::SystemTime::now()
++        .duration_since(std::time::UNIX_EPOCH)
++        .map(|d| d.as_secs())
++        .unwrap_or(0);
++    format!("{secs}")
++}
++
++/// The service's own record of the calls it made: an append-only line per
++/// call, under the host's directory, outside every app's jail.
++pub struct CallLog {
++    path: Option<PathBuf>,
++}
++
++impl CallLog {
++    pub fn at(host_dir: &Path) -> CallLog {
++        CallLog { path: Some(host_dir.join("llm").join("calls.jsonl")) }
++    }
++
++    pub fn append(&self, entry: &Value) {
++        let Some(path) = &self.path else { return };
++        if let Some(parent) = path.parent() {
++            let _ = std::fs::create_dir_all(parent);
++        }
++        let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) else {
++            return;
++        };
++        use std::io::Write;
++        let _ = writeln!(file, "{entry}");
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn a_chat_call_is_capped_and_named() {
++        let config = Config {
++            endpoint: DEFAULT_ENDPOINT.into(),
++            model: DEFAULT_MODEL.into(),
++            key: "sk-test-value-0001".into(),
++            source: "env:OCTOS_LLM_KEY".into(),
++            models: vec![],
++            timeout: 60,
++        };
++        let request = prepare(&config, &json!({"prompt": "hello", "max_tokens": 99_999})).unwrap();
++        assert_eq!(request.max_tokens, MAX_TOKENS_CEILING);
++        assert_eq!(request.model, DEFAULT_MODEL);
++        assert_eq!(request.messages.len(), 1);
++        assert!(prepare(&config, &json!({})).is_err(), "a call with nothing to ask fails");
++    }
++
++    #[test]
++    fn the_call_log_records_without_a_key() {
++        let dir = std::env::temp_dir().join(format!("llm-log-{}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&dir);
++        let log = CallLog::at(&dir);
++        log.append(&json!({"at": "1", "model": "m", "ok": true}));
++        let text = std::fs::read_to_string(dir.join("llm").join("calls.jsonl")).unwrap();
++        assert!(text.contains("\"ok\":true"));
++        let _ = std::fs::remove_dir_all(&dir);
++    }
++}
+diff --git a/crates/llm-service/src/voice.rs b/crates/llm-service/src/voice.rs
+new file mode 100644
+index 0000000..90a2ac1
+--- /dev/null
++++ b/crates/llm-service/src/voice.rs
+@@ -0,0 +1,119 @@
++//! Voice for contained apps: the OS speech engines behind `llm.speak` /
++//! `llm.listen_*`, and the PCM queue the host app plays.
++//!
++//! The app never touches a device or a model file. It asks the host to say a
++//! sentence; the host renders it with the operating system's own voice and
++//! hands the PCM to the app's audio output, which the host owns. It asks the
++//! host to open the microphone; the host runs the OS recognizer and hands back
++//! transcripts. Both directions are poll-shaped and never block the card.
++mod player;
++mod stt;
++
++pub use player::{player, Player};
++pub use stt::{listen_poll, listen_start, listen_stop};
++
++use makepad_system_speech::tts::{self};
++use makepad_system_speech::TtsOptions;
++use serde_json::{json, Value};
++
++/// `llm.speech` — what this machine can actually do, so a card shows the
++/// controls it has rather than the ones it hopes for.
++pub fn speech_status() -> Value {
++    let voices = tts::voices()
++        .into_iter()
++        .map(|voice| {
++            json!({
++                "id": voice.id,
++                "name": voice.name,
++                "language": voice.language,
++                "gender": format!("{:?}", voice.gender).to_lowercase(),
++                "offline": voice.offline,
++            })
++        })
++        .collect::<Vec<_>>();
++    json!({
++        "tts": {
++            "available": tts::available(),
++            "engine": tts::engine_name(),
++            "voices": voices,
++        },
++        "stt": {
++            "available": makepad_system_speech::stt::available(),
++            "engine": makepad_system_speech::stt::engine_name(),
++            "caps": {
++                "mic": makepad_system_speech::stt::capabilities().engine_mic,
++                "partial": makepad_system_speech::stt::capabilities().partial_results,
++                "offline": makepad_system_speech::stt::capabilities().offline,
++            },
++        },
++    })
++}
++
++/// `llm.speak {text, voice?, rate?}` — render and start playing. Returns as
++/// soon as the audio is queued; playback continues while the card draws.
++pub fn speak(args: &Value) -> Result<Value, String> {
++    let text = args
++        .get("text")
++        .and_then(|v| v.as_str())
++        .unwrap_or("")
++        .trim()
++        .to_string();
++    if text.is_empty() {
++        return Err("speak needs text".into());
++    }
++    // A long passage is spoken in one go; the OS engine renders the whole
++    // utterance, and the card's own lines are short.
++    let text: String = text.chars().take(600).collect();
++    if !tts::available() {
++        return Err("no text-to-speech engine on this machine".into());
++    }
++    let mut options = TtsOptions::default();
++    options.language = args
++        .get("lang")
++        .and_then(|v| v.as_str())
++        .unwrap_or("zh-CN")
++        .to_string();
++    if let Some(voice) = args.get("voice").and_then(|v| v.as_str()) {
++        let voice = voice.trim();
++        if !voice.is_empty() {
++            options.voice = Some(voice.to_string());
++        }
++    }
++    if let Some(rate) = args.get("rate").and_then(|v| v.as_f64()) {
++        options.rate = (rate as f32).clamp(0.5, 2.0);
++    }
++    let started = std::time::Instant::now();
++    let audio = tts::synthesize(&text, &options).map_err(|error| error.to_string())?;
++    if audio.is_empty() {
++        return Err("the voice engine produced no audio".into());
++    }
++    let seconds = audio.duration_secs();
++    let voice = options.voice.clone().unwrap_or_else(|| "default".to_string());
++    player().queue(audio.samples, audio.sample_rate, voice.clone());
++    eprintln!(
++        "llm voice: spoke {} chars in {:.2}s ({} Hz, voice {})",
++        text.chars().count(),
++        seconds,
++        audio.sample_rate,
++        voice,
++    );
++    Ok(json!({
++        "ok": true,
++        "seconds": (seconds * 10.0).round() / 10.0,
++        "sample_rate": audio.sample_rate,
++        "voice": voice,
++        "engine": tts::engine_name(),
++        "render_ms": started.elapsed().as_millis() as u64,
++        "chars": text.chars().count(),
++    }))
++}
++
++/// `llm.speaking` — is the host still talking, so the card can animate.
++pub fn speaking() -> Value {
++    let state = player().state();
++    json!({
++        "playing": state.playing,
++        "seconds": (state.seconds * 10.0).round() / 10.0,
++        "voice": state.voice,
++    })
++}
+diff --git a/crates/llm-service/src/voice/player.rs b/crates/llm-service/src/voice/player.rs
+new file mode 100644
+index 0000000..79942a1
+--- /dev/null
++++ b/crates/llm-service/src/voice/player.rs
+@@ -0,0 +1,126 @@
++//! One utterance's PCM, sampled by the host app's audio-output callback.
++//!
++//! The service renders a sentence and queues it here; the host app installs
++//! one `cx.audio_output` callback at startup and copies frames from this
++//! queue. Nothing here blocks: the queue is a short vec and a cursor, and the
++//! audio thread takes a lock only long enough to read it.
++use std::sync::{Mutex, OnceLock};
++
++#[derive(Default)]
++struct PlayInner {
++    pcm: Vec<f32>,
++    src_rate: f64,
++    /// Fractional read position in `pcm`; starts at -1.0 for "not started".
++    pos: f64,
++    playing: bool,
++    voice: String,
++    seconds: f64,
++}
++
++pub struct Player {
++    inner: Mutex<PlayInner>,
++}
++
++/// What the audio callback needs to know, without holding the lock.
++pub struct PlayerState {
++    pub playing: bool,
++    pub seconds: f64,
++    pub voice: String,
++}
++
++impl Player {
++    pub fn queue(&self, samples: Vec<f32>, sample_rate: u32, voice: String) {
++        let seconds = if sample_rate == 0 {
++            0.0
++        } else {
++            samples.len() as f64 / sample_rate as f64
++        };
++        let mut inner = self.inner.lock().unwrap();
++        inner.pcm = samples;
++        inner.src_rate = sample_rate.max(1) as f64;
++        inner.pos = 0.0;
++        inner.playing = !inner.pcm.is_empty();
++        inner.voice = voice;
++        inner.seconds = seconds;
++    }
++
++    /// Drop whatever is queued; the next `speak` starts clean.
++    pub fn stop(&self) {
++        let mut inner = self.inner.lock().unwrap();
++        inner.pcm.clear();
++        inner.playing = false;
++        inner.pos = 0.0;
++    }
++
++    pub fn state(&self) -> PlayerState {
++        let inner = self.inner.lock().unwrap();
++        PlayerState {
++            playing: inner.playing,
++            seconds: inner.seconds,
++            voice: inner.voice.clone(),
++        }
++    }
++
++    /// Fill one mono buffer at `out_rate` by linear interpolation, advancing
++    /// the cursor. Called on the audio thread; allocates nothing.
++    pub fn fill(&self, out: &mut [f32], out_rate: f64) {
++        let mut inner = self.inner.lock().unwrap();
++        if !inner.playing || inner.pcm.is_empty() {
++            return;
++        }
++        let step = inner.src_rate / out_rate.max(1.0);
++        let last = inner.pcm.len() as f64 - 1.0;
++        let mut pos = inner.pos;
++        for sample in out.iter_mut() {
++            if pos >= last {
++                inner.playing = false;
++                inner.pcm.clear();
++                inner.pos = 0.0;
++                return;
++            }
++            let index = pos.floor() as usize;
++            let frac = (pos - index as f64) as f32;
++            let a = inner.pcm[index];
++            let b = inner.pcm[index + 1];
++            *sample = a + (b - a) * frac;
++            pos += step;
++        }
++        inner.pos = pos;
++    }
++}
++
++static PLAYER: OnceLock<Player> = OnceLock::new();
++
++pub fn player() -> &'static Player {
++    PLAYER.get_or_init(|| Player { inner: Mutex::new(PlayInner::default()) })
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn a_queued_utterance_plays_once_and_stops() {
++        let player = Player { inner: Mutex::new(PlayInner::default()) };
++        player.queue(vec![0.25; 8], 16_000, "v".into());
++        let mut out = [0.0f32; 4];
++        player.fill(&mut out, 16_000.0);
++        assert!(out.iter().all(|s| (*s - 0.25).abs() < 1e-6));
++        assert!(player.state().playing);
++        // Reading past the end stops playback instead of repeating.
++        player.fill(&mut out, 16_000.0);
++        player.fill(&mut out, 16_000.0);
++        assert!(!player.state().playing);
++        let silence = [0.0f32; 4];
++        player.fill(&mut out, 16_000.0);
++        assert_eq!(out, silence);
++    }
++
++    #[test]
++    fn filling_does_not_advance_when_idle() {
++        let player = Player { inner: Mutex::new(PlayInner::default()) };
++        let mut out = [0.5f32; 4];
++        player.fill(&mut out, 48_000.0);
++        assert_eq!(out, [0.5f32; 4]);
++    }
++}
+diff --git a/crates/llm-service/src/voice/stt.rs b/crates/llm-service/src/voice/stt.rs
+new file mode 100644
+index 0000000..94cea23
+--- /dev/null
++++ b/crates/llm-service/src/voice/stt.rs
+@@ -0,0 +1,135 @@
++//! Microphone sessions over the OS recognizer, owned by the host.
++//!
++//! A card calls `llm.listen_start`, then polls `llm.listen_poll` while its
++//! user speaks, then `llm.listen_stop`. The recognizer runs on its own
++//! thread; events land in a queue the poll drains, so a card never blocks on
++//! a microphone and never touches the device itself.
++use makepad_system_speech::{stt, SttEvent, SttOptions};
++use serde_json::{json, Value};
++use std::sync::mpsc;
++use std::sync::{Arc, Mutex, OnceLock};
++
++struct ListenState {
++    /// Events the recognizer produced since the last poll.
++    events: Arc<Mutex<Vec<SttEvent>>>,
++    /// Dropping the handle stops the session.
++    handle: Option<makepad_system_speech::ListenHandle>,
++    language: String,
++    engine: &'static str,
++    /// True until `listen_stop`; the card shows a live state for it.
++    live: bool,
++}
++
++static LISTEN: OnceLock<Mutex<Option<ListenState>>> = OnceLock::new();
++
++fn state() -> &'static Mutex<Option<ListenState>> {
++    LISTEN.get_or_init(|| Mutex::new(None))
++}
++
++/// `llm.listen_start {language?}` — open the microphone. Replaces any session
++/// already running.
++pub fn listen_start(args: &Value) -> Result<Value, String> {
++    if !stt::available() {
++        return Err("no speech recognizer on this machine".into());
++    }
++    let language = args
++        .get("language")
++        .and_then(|v| v.as_str())
++        .map(str::trim)
++        .filter(|value| !value.is_empty())
++        .unwrap_or("zh-CN")
++        .to_string();
++    let mut options = SttOptions::default();
++    options.language = language.clone();
++    options.partial_results = true;
++
++    // Replace whatever was running: dropping the handle stops it.
++    {
++        let mut slot = state().lock().unwrap();
++        if let Some(previous) = slot.take() {
++            drop(previous);
++        }
++    }
++
++    let events: Arc<Mutex<Vec<SttEvent>>> = Arc::new(Mutex::new(Vec::new()));
++    let sink_events = events.clone();
++    let (tx, rx) = mpsc::channel::<SttEvent>();
++    // The recognizer hands events to `tx` on its worker; this relay copies
++    // them into the queue the polls read, and lets the channel close when the
++    // session ends.
++    std::thread::Builder::new()
++        .name("llm-voice-relay".to_string())
++        .spawn(move || {
++            for event in rx {
++                sink_events.lock().unwrap().push(event);
++            }
++        })
++        .map_err(|error| format!("cannot start the voice relay: {error}"))?;
++
++    let handle = stt::listen(&options, tx).map_err(|error| error.to_string())?;
++    let mut slot = state().lock().unwrap();
++    *slot = Some(ListenState { events, handle: Some(handle), language: language.clone(), engine: stt::engine_name(), live: true });
++    Ok(json!({
++        "ok": true,
++        "language": language,
++        "engine": stt::engine_name(),
++        "note": "the microphone is open; poll listen_poll while the person speaks",
++    }))
++}
++
++/// `llm.listen_poll` — take the events since the last poll.
++pub fn listen_poll() -> Value {
++    let mut slot = state().lock().unwrap();
++    let Some(listen) = slot.as_mut() else {
++        return json!({"live": false, "listening": false, "events": []});
++    };
++    let events: Vec<SttEvent> = listen.events.lock().unwrap().drain(..).collect();
++    let mut out = Vec::new();
++    let mut ended = false;
++    for event in events {
++        match event {
++            SttEvent::Level(value) => out.push(json!({"kind": "level", "v": value})),
++            SttEvent::Partial(text) => out.push(json!({"kind": "partial", "text": text})),
++            SttEvent::Final(transcript) => {
++                let text = transcript.text();
++                if !text.is_empty() {
++                    out.push(json!({"kind": "final", "text": text}));
++                }
++            }
++            SttEvent::Error(error) => out.push(json!({"kind": "error", "text": error.to_string()})),
++            SttEvent::Ended => {
++                ended = true;
++                out.push(json!({"kind": "ended"}));
++            }
++        }
++    }
++    if ended {
++        // The handle is spent once Ended arrives; keep the queue for a last
++        // poll, but nothing more will come.
++        listen.handle = None;
++        listen.live = false;
++    }
++    json!({
++        "live": listen.live,
++        "listening": listen.live,
++        "language": listen.language,
++        "engine": listen.engine,
++        "events": out,
++    })
++}
++
++/// `llm.listen_stop` — close the microphone. Any final result still arrives
++/// through one more poll, then `ended`.
++pub fn listen_stop() -> Value {
++    let mut slot = state().lock().unwrap();
++    match slot.as_mut() {
++        Some(listen) => {
++            if let Some(handle) = listen.handle.take() {
++                handle.stop();
++            }
++            listen.live = false;
++            json!({"ok": true, "note": "the microphone is closed"})
++        }
++        None => json!({"ok": true, "note": "no session was open"}),
++    }
++}

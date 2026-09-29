@@ -1,0 +1,103 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 85a4a91..eb86410 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -21,6 +21,7 @@ members = [
+     "crates/card-host",
+     "crates/app-host",
+     "crates/app-hub-app",
++    "crates/llm-service",
+ ]
+ 
+ # Builds resolve the pinned sources from the prepared sibling checkouts, as
+diff --git a/crates/card-host/Cargo.toml b/crates/card-host/Cargo.toml
+index 70ce301..359d16c 100644
+--- a/crates/card-host/Cargo.toml
++++ b/crates/card-host/Cargo.toml
+@@ -24,6 +24,7 @@ octoscript-makepad = { git = "https://github.com/OctoSense-org/Octoscript-Makepa
+ octoscript-widgets = { git = "https://github.com/OctoSense-org/Octoscript-Makepad.git", rev = "b1596d9c2cee6e80cca9d27b1b0c2d57b9d28dd8" }
+ serde_json = "1"
+ octosense-appstore = { path = "../appstore" }
++octosense-llm-service = { path = "../llm-service" }
+ 
+ [[bin]]
+ name = "card-host"
+diff --git a/crates/card-host/src/host.rs b/crates/card-host/src/host.rs
+index e0af835..648cfb0 100644
+--- a/crates/card-host/src/host.rs
++++ b/crates/card-host/src/host.rs
+@@ -144,6 +144,58 @@ fn register_card_vocabulary() {
+     register_splash_isolate_mod(makepad_widgets::splash::register_agent_module);
+ }
+ 
++/// What the shell can do for a contained app: the host services. Registered
++/// once, process-wide, and offered only to apps whose manifest grants the
++/// family.
++///
++/// `llm` is language models and voice. The key lives in this process's
++/// environment and stays here; a card asks a question and gets an answer
++/// back, and the speaker and the microphone belong to this process too.
++fn register_host_services() {
++    octosense_llm_service::register();
++    let status = octosense_llm_service::Config::from_env();
++    if status.ready() {
++        log!(
++            "card-host: llm service ready — {} at {} (key from {})",
++            status.model,
++            status.endpoint,
++            status.source,
++        );
++    } else {
++        log!(
++            "card-host: llm service registered without a key — set OCTOS_LLM_KEY to answer cards that ask for one",
++        );
++    }
++}
++
++/// One audio output, installed once, reading whatever the voice service has
++/// queued. A card cannot hold a device; `llm.speak` renders a sentence and
++/// this callback is where it becomes sound.
++fn install_audio_output(cx: &mut Cx) {
++    cx.audio_output(0, move |info, output| {
++        output.zero();
++        let frames = output.frame_count();
++        let channels = output.channel_count();
++        if frames == 0 || channels == 0 {
++            return;
++        }
++        let player = octosense_llm_service::voice::player();
++        if !player.state().playing {
++            return;
++        }
++        let mut mono = vec![0.0f32; frames];
++        player.fill(&mut mono, info.sample_rate.max(1.0));
++        // The engine renders mono; every output channel gets the same frames.
++        let mut interleaved = vec![0.0f32; frames * channels];
++        for frame in 0..frames {
++            for channel in 0..channels {
++                interleaved[frame * channels + channel] = mono[frame];
++            }
++        }
++        output.copy_from_interleaved(channels, &interleaved);
++    });
++}
++
+ impl App {
+     fn mount(&mut self, cx: &mut Cx) {
+         let Some(args) = ARGS.get() else {
+@@ -229,8 +281,15 @@ impl AppMain for App {
+         if !self.mounted {
+             self.mounted = true;
+             register_card_vocabulary();
++            register_host_services();
++            install_audio_output(cx);
+             self.mount(cx);
+         }
++        // The speakers this process may use, handed over by the platform once
++        // they are known; the voice service's queue plays through them.
++        if let Event::AudioDevices(devices) = event {
++            cx.use_audio_outputs(&devices.default_output());
++        }
+         self.ui.handle_event(cx, event, &mut Scope::empty());
+         // Host services (a sheet the service raises, answers from its
+         // workers), exactly as the Card runner does.
