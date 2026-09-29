@@ -98,6 +98,28 @@ let ag_used = 0
 let ag_prev = ""
 let ag_last_user = ""
 
+// ===== 语音层 · 让主编说得出、听得见（能力由宿主提供，见 llm.speech） =====
+let vc_tts = false
+let vc_stt = false
+let vc_voices = 0
+let vc_auto = true
+let vc_listen = false
+let vc_partial = ""
+let vc_heard = ""
+let vc_note = ""
+let vc_last_voice = false
+
+// ===== 读者画像 · 这份晨报只为一个人编 =====
+let pf_briefs = 0
+let pf_opens = 0
+let pf_notes = []
+let pf_t = [{id: "ai" n: 0} {id: "oss" n: 0} {id: "sec" n: 0} {id: "chip" n: 0}]
+
+// ===== 本地知识库 · 本报自己的记忆（不联网） =====
+let arc = []
+let arc_rel = []
+let arc_hits = []
+
 fn fetch(url){
     let p = promise()
     net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{
@@ -644,9 +666,23 @@ fn load_story_page(){
     story_finish()
 }
 
+// 看门狗：官方页面抓取可能很慢（境外站点），不能让阅读页一直停在「正在打开」。
+// 到点还没落地就直接进入 AI 解读，界面上说明官方原文这次没取到。
+fn story_watch(left){
+    if story_state != "loading" { return }
+    if left <= 0 {
+        story_err = "这次没能及时取到官方页面，下面是列表里已有的信息和 AI 解读。"
+        story_finish()
+        sync_ui()
+        return
+    }
+    start_timeout(1.0, || story_watch(left - 1))
+}
+
 fn load_story(){
     if story == nil { return }
     story_state = "loading"
+    start_timeout(1.0, || story_watch(12))
     if hn_id(story) != "" { load_story_comments() } else { load_story_page() }
 }
 
@@ -865,6 +901,9 @@ fn open_story(r){
     art_ms = 0
     art_cached = 0
     art_note = ""
+    // 画像 + 记忆：读过什么、这条和往期哪几条是一条线索
+    pf_watch(r)
+    arc_rel = arc_rel_for(r)
     sync_ui()
     start_timeout(0.05, || load_story())
     start_timeout(0.60, || art_kick())
@@ -899,6 +938,430 @@ fn story_step(d){
 
 
 // =====================================================================
+// 语音层 · 主编说得出、听得见（宿主语音服务：llm.speech / speak / listen_*）
+// =====================================================================
+fn vc_probe(){
+    host.request("llm.speech", {}, fn(r){
+        if r.is_ok && r.data != nil {
+            let tts = r.data["tts"]
+            if tts != nil {
+                // 注意：不能在 splash 里用 `ok` 当变量名，它是保留字。
+                let tv = tts["available"]
+                if tv != nil {
+                    if tv { vc_tts = true } else { vc_tts = false }
+                }
+                let vs = tts["voices"]
+                if vs != nil { vc_voices = vs.len() }
+            }
+            let stt = r.data["stt"]
+            if stt != nil {
+                let sv = stt["available"]
+                if sv != nil {
+                    if sv { vc_stt = true } else { vc_stt = false }
+                }
+            }
+        }
+        if vc_tts && vc_stt { vc_note = "主编能说话，也能听见你" }
+        else if vc_tts { vc_note = "主编能说话；这台机器没有可用的语音识别，打字一样用" }
+        else { vc_note = "这台机器没有可用的语音能力，全程打字也算数" }
+        sync_ui()
+    })
+}
+
+fn vc_say_now(text){
+    if !vc_tts { return }
+    let t = art_cut(text, 150)
+    if t == "" { return }
+    host.request("llm.speak", {text: t lang: "zh-CN"}, fn(r){})
+}
+
+// 自动朗读只在「对主编说过话」的时候出声，不打搅只想看报的人。
+fn vc_say(text){
+    if !vc_auto { return }
+    vc_say_now(text)
+}
+
+fn vc_toggle(){
+    if vc_listen { vc_stop() }
+    else { vc_start() }
+}
+
+fn vc_toggle_auto(){
+    vc_auto = !vc_auto
+    if vc_auto { vc_note = "主编回复时会自动念出来" }
+    else { vc_note = "自动朗读已关，只显示文字" }
+    sync_ui()
+}
+
+fn vc_mic_text(){
+    if vc_listen { return "■ 正在听" }
+    "🎙 说话"
+}
+
+fn vc_caps(){
+    ag_caps_line()
+}
+
+fn vc_start(){
+    if !vc_stt {
+        vc_note = "这台机器没有可用的语音识别，先用文字对我说"
+        sync_ui()
+        return
+    }
+    vc_partial = ""
+    vc_heard = ""
+    vc_note = "正在打开麦克风…"
+    sync_ui()
+    host.request("llm.listen_start", {language: "zh-CN"}, fn(r){
+        if r.is_ok {
+            vc_listen = true
+            vc_note = "我在听，说完点「停」或者直接说「就这样」"
+            sync_ui()
+            start_timeout(0.4, || vc_poll_go())
+        } else {
+            vc_note = "麦克风打不开：" + r.error
+            sync_ui()
+        }
+    })
+}
+
+fn vc_stop(){
+    vc_listen = false
+    vc_note = "麦克风已关上"
+    sync_ui()
+    host.request("llm.listen_stop", {}, fn(r){})
+}
+
+fn vc_poll_go(){
+    if !vc_listen { return }
+    host.request("llm.listen_poll", {}, fn(r){
+        if r.is_ok && r.data != nil {
+            let evs = r.data["events"]
+            if evs != nil {
+                for e in evs {
+                    let kv = e["kind"]
+                    let k = ""
+                    if kv != nil { k = "" + kv }
+                    let tv = e["text"]
+                    let t = ""
+                    if tv != nil { t = "" + tv }
+                    if k == "partial" {
+                        vc_partial = t
+                        vc_note = "听到：" + t
+                    }
+                    if k == "final" && t != "" {
+                        vc_partial = ""
+                        vc_heard = t
+                        vc_listen = false
+                        vc_note = "已听到：" + t
+                        vc_last_voice = true
+                        if !ag_open { ag_open = true }
+                        ag_say(t)
+                    }
+                    if k == "error" {
+                        vc_note = "语音识别停了：" + t
+                        vc_listen = false
+                    }
+                    if k == "ended" && vc_listen {
+                        vc_listen = false
+                        vc_note = "这一轮听完了"
+                    }
+                }
+            }
+            let live = r.data["live"]
+            if live != nil && live == false && vc_listen {
+                vc_listen = false
+                vc_note = "这一轮听完了"
+            }
+            sync_ui()
+        }
+        if vc_listen { start_timeout(0.4, || vc_poll_go()) }
+        else { host.request("llm.listen_stop", {}, fn(r2){}) }
+    })
+}
+
+// 把这一期念出来：导语 + 前三条标题（通勤路上不用看屏幕）
+fn vc_brief(){
+    if !vc_tts {
+        vc_note = "这台机器没有可用的语音合成"
+        sync_ui()
+        return
+    }
+    let t = ai_intro
+    if t == "" { t = "这是今天的晨报" }
+    let i = 1
+    for r in show_rows() {
+        if i < 4 {
+            let ii = "" + i
+            t = t + "。第 " + ii + " 条，" + r.title
+        }
+        i = i + 1
+    }
+    vc_say_now(t)
+    vc_note = "正在把这一期念给你听"
+    sync_ui()
+    start_timeout(0.9, || vc_speak_check(6))
+}
+
+// 播放状态回读：让「正在说」这件事在界面上看得见（也用来验证语音真的在走）
+fn vc_speak_check(left){
+    if left <= 0 { return }
+    host.request("llm.speaking", {}, fn(r){
+        if r.is_ok && r.data != nil {
+            let p = r.data["playing"]
+            let s = r.data["seconds"]
+            let playing = false
+            if p != nil { if p { playing = true } }
+            if playing {
+                let sv = ""
+                if s != nil { sv = "" + s }
+                vc_note = "主编正在说话…（这一轮约 " + sv + " 秒）"
+                sync_ui()
+                start_timeout(0.9, || vc_speak_check(left - 1))
+            } else {
+                vc_note = "已经念完了"
+                sync_ui()
+            }
+        }
+    })
+}
+
+// =====================================================================
+// 读者画像 · 这份报只为一个人编（存在 profile.json，不上传）
+// =====================================================================
+fn pf_bump(id){
+    let out = []
+    for t in pf_t {
+        let n = t.n
+        if t.id == id { n = n + 1 }
+        out.push({id: t.id n: n})
+    }
+    pf_t = out
+}
+
+fn pf_watch(r){
+    for t in topics {
+        if topic_hit(t, r.title) { pf_bump(t.id) }
+    }
+    pf_opens = pf_opens + 1
+    pf_save()
+}
+
+fn pf_save(){
+    fs.write("profile.json", {schema: 1 briefs: pf_briefs opens: pf_opens notes: pf_notes t: pf_t saved_at: time_now()}.to_json())
+}
+
+fn pf_load(){
+    if fs.exists("profile.json") {
+        let v = fs.read("profile.json").parse_json()
+        if v != nil {
+            let b = v["briefs"]
+            if b != nil { pf_briefs = b }
+            let o = v["opens"]
+            if o != nil { pf_opens = o }
+            let n = v["notes"]
+            if n != nil { pf_notes = n }
+            let t = v["t"]
+            if t != nil { if t.len() > 0 { pf_t = t } }
+        }
+    }
+}
+
+fn pf_note_add(s){
+    if s == "" { return }
+    pf_notes.push(s)
+    if pf_notes.len() > 12 { pf_notes.remove(0) }
+    pf_save()
+}
+
+fn pf_notes_line(){
+    if pf_notes.len() == 0 { return "还没有" }
+    let out = ""
+    let i = 0
+    for x in pf_notes {
+        if i > 0 { out = out + "；" }
+        out = out + x
+        i = i + 1
+    }
+    out
+}
+
+fn pf_n(id){
+    for t in pf_t { if t.id == id { return t.n } }
+    0
+}
+
+fn pf_label(id){
+    // pf_t 里只存 id 和次数；标签要去 topics 里按 id 取。
+    for t in topics { if t.id == id { return t.label } }
+    id
+}
+
+fn pf_focus_short(){
+    let out = ""
+    for t in pf_t {
+        if t.n > 0 {
+            if out != "" { out = out + "、" }
+            out = out + pf_label(t.id)
+        }
+    }
+    out
+}
+
+// 给编辑部看的一行画像：它决定今天的取舍偏向谁
+fn pf_focus(){
+    let out = ""
+    for t in pf_t {
+        if t.n > 0 {
+            if out != "" { out = out + "、" }
+            out = out + pf_label(t.id) + " " + t.n + " 次"
+        }
+    }
+    if out == "" { return "这位读者还没有明显偏好，按大众都会关心的标准选" }
+    "这位读者最近常读：" + out
+}
+
+fn pf_view_line(){
+    if pf_briefs == 0 && pf_opens == 0 { return "" }
+    let out = "读者画像 · 已出报 " + pf_briefs + " 期"
+    if pf_opens > 0 { out = out + " · 读过 " + pf_opens + " 条" }
+    let f = pf_focus_short()
+    if f != "" { out = out + " · 常读 " + f }
+    if pf_notes.len() > 0 { out = out + " · 记着你的 " + pf_notes.len() + " 条偏好" }
+    out
+}
+
+// =====================================================================
+// 本地知识库 · 本报自己的记忆：往期报道存在 archive.json，检索不联网
+// =====================================================================
+fn arc_date(){
+    let t = local_time(time_now() + 28800)
+    pad2(t.month) + "-" + pad2(t.day)
+}
+
+fn arc_add(rows){
+    let d = arc_date()
+    for r in rows {
+        let s = r["summary"]
+        if s == nil { s = "" }
+        arc.push({ts: time_now() date: d id: r.id title: r.title source: r.source sum: art_cut(s, 90)})
+    }
+    if arc.len() > 240 {
+        let keep = []
+        let k = 0
+        let n = arc.len()
+        for e in arc {
+            if k >= n - 240 { keep.push(e) }
+            k = k + 1
+        }
+        arc = keep
+    }
+    arc_save()
+}
+
+fn arc_save(){
+    fs.write("archive.json", {schema: 1 saved_at: time_now() items: arc}.to_json())
+}
+
+fn arc_load(){
+    if fs.exists("archive.json") {
+        let v = fs.read("archive.json").parse_json()
+        if v != nil {
+            let items = v["items"]
+            if items != nil { arc = items }
+        }
+    }
+}
+
+// 关键词检索：按空格拆词，全部命中才算（AND）。纯本地，无网络。
+fn arc_find(q){
+    let out = []
+    let s = q.trim()
+    if s == "" {
+        let n = arc.len()
+        let k = 0
+        for e in arc {
+            if k >= n - 6 { out.push(e) }
+            k = k + 1
+        }
+        return out
+    }
+    let words = s.split(" ")
+    for e in arc {
+        let hay = e.title
+        let sm = e["sum"]
+        if sm != nil { hay = hay + " " + sm }
+        let hit = true
+        let used = 0
+        for w in words {
+            let ww = w.trim()
+            if ww != "" {
+                used = used + 1
+                if hay.search(ww) < 0 { hit = false }
+            }
+        }
+        if hit && used > 0 { out.push(e) }
+    }
+    out
+}
+
+fn topic_of(id){
+    for t in topics { if t.id == id { return t } }
+    nil
+}
+
+// 这条新闻命中的主题，本报过去报过哪几条（追一条线索）
+fn arc_rel_for(r){
+    let ids = []
+    for t in topics {
+        if topic_hit(t, r.title) { ids.push(t.id) }
+    }
+    let out = []
+    if ids.len() == 0 { return out }
+    for e in arc {
+        if e.id != r.id {
+            if out.len() < 3 {
+                let hit = false
+                for i in ids {
+                    let t = topic_of(i)
+                    if t != nil && topic_hit(t, e.title) { hit = true }
+                }
+                if hit { out.push(e) }
+            }
+        }
+    }
+    out
+}
+
+fn arc_rel_text(){
+    let out = ""
+    let i = 0
+    for e in arc_rel {
+        if i > 0 { out = out + "\n" }
+        out = out + "· " + e.date + "　" + e.title
+        i = i + 1
+    }
+    out
+}
+
+fn arc_hits_text(){
+    if arc_hits.len() == 0 { return "档案里没有相关的往期报道。" }
+    let out = "本报档案里找到 " + arc_hits.len() + " 条相关："
+    let n = arc_hits.len()
+    let i = 0
+    for e in arc_hits {
+        if i >= n - 6 { out = out + "\n· " + e.date + "　" + e.title }
+        i = i + 1
+    }
+    out
+}
+
+fn arc_line(){
+    if arc.len() == 0 { return "" }
+    "本报记忆 " + arc.len() + " 条"
+}
+
+// =====================================================================
 // L1 感知层 · 主编眼里的这个程序
 // =====================================================================
 fn ag_phase_name(){
@@ -929,6 +1392,12 @@ fn ag_context(){
         out = out + "\n【用户正在读的那条】" + story_title
         if story_sum != "" { out = out + "\n它的摘要：" + art_cut(story_sum, 300) }
     }
+    out = out + "\n【读者画像】" + pf_focus() + "。已出报 " + pf_briefs + " 期，读过 " + pf_opens + " 条。"
+    if pf_notes.len() > 0 { out = out + "\n读者要你记住的：" + pf_notes_line() }
+    out = out + "\n【本报记忆】档案里有 " + arc.len() + " 条往期报道（search_archive 可查）。"
+    if vc_tts { out = out + "\n【语音】你能用 speak 说话；自动朗读" }
+    if vc_tts { if vc_auto { out = out + "已打开。" } else { out = out + "已关闭。" } }
+    if vc_stt { if vc_listen { out = out + "用户正在对你说话，听到的片段：" + vc_partial } }
     out
 }
 
@@ -948,6 +1417,9 @@ let ag_tools = [
     {id: "step_story" hint: "前后条" desc: "在阅读页跳到相邻一条。args: {d: 1 是下一条，-1 是上一条}"}
     {id: "redraw_cover" hint: "换头版" desc: "让视觉主编重画今日头版。args: {}"}
     {id: "draw_art" hint: "画配图" desc: "给正在读的这一条现场画一张配图。args: {}"}
+    {id: "search_archive" hint: "查本报档案" desc: "在本报自己的往期报道里检索（本地，不联网）。args: {q: 关键词，可以空格分隔多个词；留空则列出最近几条}"}
+    {id: "remember_reader" hint: "记住偏好" desc: "把读者亲口说的一条长期偏好记下来，以后每期都算数。args: {text: 一句话，例如「多关注开源社区」。只有读者明确要求记时才调用}"}
+    {id: "speak" hint: "说一句" desc: "把一句话念出来给读者听（用这台机器的语音）。args: {text: 要念的内容}。只有当读者明确要求「念给我听 / 读出来」时才调用"}
 ]
 
 fn ag_tool_lines(){
@@ -966,6 +1438,14 @@ fn ag_tool_hint(){
         out = out + t.hint
     }
     out
+}
+
+// 对话条上只放一句人话：能力清单太长，摆在下面反而看不清。
+fn ag_caps_line(){
+    if vc_tts {
+        return "能改设置 · 能出报 · 能翻页 · 能查本报档案 · 能说话"
+    }
+    "能改设置 · 能出报 · 能翻页 · 能查本报档案"
 }
 
 fn ag_arg(args, key){
@@ -1087,6 +1567,34 @@ fn ag_do(tool, args){
         art_retry()
         return "正在给这一条画配图"
     }
+    if tool == "search_archive" {
+        let q = ""
+        let v = ag_arg(args, "q")
+        if v != nil { q = "" + v }
+        arc_hits = arc_find(q)
+        if phase != "story" { phase = "done" }
+        sync_ui()
+        return arc_hits_text()
+    }
+    if tool == "remember_reader" {
+        let s = ""
+        let v = ag_arg(args, "text")
+        if v != nil { s = "" + v }
+        if s == "" { return "没听清要记什么，再说一次" }
+        pf_note_add(s)
+        sync_ui()
+        return "已记住：" + s + "。以后每一期都会照这条偏好选。"
+    }
+    if tool == "speak" {
+        let s = ""
+        let v = ag_arg(args, "text")
+        if v != nil { s = "" + v }
+        if s == "" { s = ag_note }
+        if !vc_tts { return "这台机器没有可用的语音合成，念不出来" }
+        vc_auto = false
+        vc_say_now(s)
+        return "正在念：" + art_cut(s, 40)
+    }
     "没有 " + tool + " 这个工具"
 }
 
@@ -1100,6 +1608,8 @@ fn ag_system(){
     "\n\n你能调用的工具（只能从这个清单里选，不能自己发明）：\n" + ag_tool_lines() +
     "\n\n输出规则：每一轮只输出一个 JSON 对象。say 是给用户看的一句话（中文、口语、不超过 60 字）；tool 是要调用的工具名，不需要工具时填空字符串；args 是工具参数对象，没有参数就写空对象。多步任务一步一个工具，拿到结果再决定下一步，最多六步。同一个工具不要连着调用两次。用户说「生成今天的晨报」这类请求，就是两步：先 set_topics（如果他指定了主题），再 make_plan；到计划页就停手，请他说「批准」（或点界面按钮），绝不要自己调用 approve。事情办完立刻用 say 收尾一句。" +
     "approve 会真的联网取数：只有用户明确说要生成、批准、开始时才调用它；用户只是问问题、看东西，就直接用 say 回答，不要调用工具。" +
+    "你有三样别人没有的东西，该用就用：① search_archive 查本报自己的往期报道，用户问「我们之前报过什么」「这条之前有没有提过」时用它；② remember_reader 在用户明确要你记住一条偏好时用它，那是他亲口说的长期偏好；③ speak 在用户明确要你念出来时把话变成声音。" +
+    "注意：search_archive 只查本报档案（本地），不是联网搜索。用户问的是外面的事、你不知道的事，就如实说不知道，不要编。" +
     "\n\n" + ag_context()
 }
 
@@ -1203,6 +1713,8 @@ fn ag_reply(r){
         ag_note = "主编 · " + seconds_text(r.data.elapsed_ms) + " · " + ag_model_text()
         ag_trim_log()
         sync_ui()
+        // 主编的收尾话，配上自己的声音说一遍
+        if say != "" && tool != "speak" { vc_say(say) }
         return
     }
     let sig = tool
@@ -1559,7 +2071,7 @@ fn judge_try(n){
     if focus == "" { focus = topics_line() }
     if focus == "未选主题（全都要）" { focus = "没有特别偏好，挑最重要的科技新闻" }
     let panel_note_line = panel_digest_text()
-    let ask_text_full = "今天是 " + today_text() + "。\n读者的关注点：" + focus + "\n\n候选标题（序号从 0 开始）\n" + list + "\n\n三位初审编辑的独立意见如下，各自的推荐序号互不商量，仅供你参考：\n" + panel_note_line + "\n从候选里挑出最多 " + limit + " 条最值得进入晨报的科技项目，按重要性从高到低排序，每条写一句中文入选理由。当三位编辑意见不一致时，你来做最终取舍。直接输出 JSON，不要思考过程。"
+    let ask_text_full = "今天是 " + today_text() + "。\n读者的关注点：" + focus + "\n读者画像：" + pf_focus() + "\n\n候选标题（序号从 0 开始）\n" + list + "\n\n三位初审编辑的独立意见如下，各自的推荐序号互不商量，仅供你参考：\n" + panel_note_line + "\n从候选里挑出最多 " + limit + " 条最值得进入晨报的科技项目，按重要性从高到低排序，每条写一句中文入选理由。当三位编辑意见不一致时，你来做最终取舍。直接输出 JSON，不要思考过程。"
     host.request("llm.chat", {
         system: "你是一位科技新闻主编，手下有技术、行业、读者三位初审编辑。三位编辑已经各自给过意见，你参考但不被他们绑住，做最终取舍。直接输出一个 JSON 对象，第一个字符就是 {，不要输出任何推理过程或思考。不要啰嗦，不要加围栏。JSON 结构：intro 是导语（字符串），picks 是数组，每项含 i（候选序号，整数）和 why（入选理由，字符串）。"
         prompt: ask_text_full
@@ -1658,10 +2170,14 @@ fn run_brief(){
 
 fn finish(){
     finished_at = time_now()
+    pf_briefs = pf_briefs + 1
+    pf_save()
     if picked.len() > 0 {
         fs.write("last_brief.json", {ts: finished_at rows: picked intro: ai_intro whys: ai_whys}.to_json())
         last_rows = picked
         last_at = finished_at
+        // 往期档案：这一期进了本报记忆，以后可以「追一条线索」
+        arc_add(picked)
     } else if failed.len() < sources.len() {
         fs.write("last_brief.json", {ts: finished_at rows: []}.to_json())
         last_rows = []
@@ -1671,6 +2187,17 @@ fn finish(){
     busy = false
     sync_ui()
     if picked.len() > 0 { start_timeout(2.5, || cover_kick()) }
+    if picked.len() > 0 && vc_auto {
+        start_timeout(1.2, || vc_hello_intro())
+    }
+}
+
+fn vc_hello_intro(){
+    if !vc_auto { return }
+    let t = "今天的晨报好了。"
+    if ai_intro != "" { t = t + ai_intro }
+    else { t = t + "一共选了 " + picked.len() + " 条。" }
+    vc_say_now(t)
 }
 
 fn load_last(){
@@ -1913,6 +2440,8 @@ fn sync_ui(){
     ui.story_more_head.set_text(story_more_head())
     ui.story_more_text.set_text(story_more_text())
     ui.story_more_box.set_visible(story_more.len() > 0)
+    ui.arc_box.set_visible(arc_rel.len() > 0)
+    ui.arc_text.set_text(arc_rel_text())
     ui.story_cmt_head.set_text(story_cmt_head())
     ui.story_cmt_text.set_text(story_cmt_text())
     ui.story_cmt_box.set_visible(story_comments.len() > 0)
@@ -1943,13 +2472,29 @@ fn sync_ui(){
     ui.pipe_line.set_text(pipe_text())
     ui.stale_line.set_text(stale_line())
     ui.stale_line.set_visible(stale_line() != "")
+    ui.pf_line.set_text(pf_view_line())
+    ui.pf_line.set_visible(pf_view_line() != "")
     ui.list.render()
     ui.art_pane.render()
     ui.ag_panel.set_visible(ag_open)
     ui.ag_note.set_text(ag_line())
-    ui.ag_caps.set_text("主编可以：" + ag_tool_hint())
+    ui.ag_caps.set_text(vc_caps())
     ui.ag_pill.set_text(ag_pill_text())
+    ui.vc_mic.set_text(vc_mic_text())
+    ui.vc_note.set_text(vc_note)
+    ui.vc_autob.set_text(vc_auto_text())
+    ui.vc_pill_mic.set_text(vc_mic_text())
+    ui.vc_pill_mic.set_visible(vc_stt)
+    ui.arc_pill.set_text(arc_line())
     if ag_open { ui.ag_log_box.render() }
+}
+
+fn vc_auto_text(){
+    if vc_tts {
+        if vc_auto { return "自动朗读：开" }
+        return "自动朗读：关"
+    }
+    "语音：不可用"
 }
 
 fn art_load(){
@@ -1981,7 +2526,10 @@ fn cg_text(){
 fn boot(){
     load_last()
     art_load()
+    pf_load()
+    arc_load()
     sync_ui()
+    start_timeout(0.30, || vc_probe())
     start_timeout(1.10, || cg_text())
     start_timeout(3.12, || cg_off())
 }
@@ -2048,6 +2596,12 @@ let PillBtn = ButtonFlat{height: 34 padding: Inset{left: 16 right: 16}
         border_color: #xffd39a border_color_hover: #xffd39a border_color_down: #xffd39a}
     draw_text +: {color: #xffd39a color_hover: #xffd39a color_down: #xffd39a text_style +: {font_size: 13}}
 }
+// 正在收音时变成实心洋红，一眼看出「它在听」
+let MicBtn = ButtonFlat{height: 34 padding: Inset{left: 14 right: 14}
+    draw_bg +: {border_radius: 17.0 color: #x18213a color_hover: #x1d2a45 color_down: #x121a2e border_size: 1.0
+        border_color: #x28345a border_color_hover: #x3a4a72 border_color_down: #x28345a}
+    draw_text +: {color: #xe8eefc color_hover: #xffffff color_down: #xe8eefc text_style +: {font_size: 12}}
+}
 
 HostedView{width: Fill height: Fill
     full: View{width: Fill height: Fill flow: Overlay show_bg: true draw_bg.color: ground
@@ -2060,6 +2614,7 @@ HostedView{width: Fill height: Fill
                 Label{width: Fill text: "MORNING BRIEF · AI EDITION · 常驻主编在线" draw_text.color: #xe0245e draw_text.text_style.font_size: 10}
             }
             intent_line := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
+            hint_line := Label{width: Fill text: "这份报会记住你读过的内容，越读越懂你；右下角「AI 主编」可以说话、可以查本报档案" draw_text.color: #xa0a0a8 draw_text.text_style.font_size: 10}
             ask_in := TextInput{width: Fill height: 40 empty_text: "也可以直接写，例如：我想看芯片和 AI 的大新闻"
                 on_change: |text| set_ask(text)
                 draw_bg +: {color: #xffffff color_hover: #xffffff color_focus: #xffffff color_empty: #xffffff
@@ -2190,6 +2745,7 @@ HostedView{width: Fill height: Fill
                 }
             }
             View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 14 right: 14 bottom: 60}
+                pf_line := Label{visible: false width: Fill text: "" draw_text.color: #x8a6d3b draw_text.text_style.font_size: 10}
                 sel_line := Label{width: Fill text: "点任意条目，在卡片里读这条新闻的来龙去脉；想让主编动手，就点右下角的「AI 主编」" draw_text.color: secondary draw_text.text_style.font_size: 11}
                 View{width: Fill height: 44 flow: Right align: Align{y: 0.5}
                     GhostBtn{text: "重新开始" on_click: || restart()}
@@ -2243,6 +2799,12 @@ HostedView{width: Fill height: Fill
                     story_state := Label{width: Fill text: "" draw_text.color: #x8e8e93 draw_text.text_style.font_size: 11}
                     story_ai := Label{width: Fill text: "" max_lines: 20 draw_text.color: ink draw_text.text_style.font_size: 13}
                 }
+                arc_box := View{visible: false width: Fill height: Fit flow: Down spacing: 4
+                    new_batch: true show_bg: true draw_bg.color: #xfff7f0 draw_bg.border_radius: 12.0
+                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                    Label{width: Fill text: "本报追过这条线索" draw_text.color: #xb26a00 draw_text.text_style: theme.font_bold{font_size: 11}}
+                    arc_text := Label{width: Fill text: "" max_lines: 6 draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
+                }
                 story_more_box := View{visible: false width: Fill height: Fit flow: Down spacing: 4
                     new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
                     padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
@@ -2279,7 +2841,13 @@ HostedView{width: Fill height: Fill
                     BarBtn{text: "收起" on_click: || ag_toggle()}
                 }
                 ag_caps := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x6c7d9e draw_text.text_style.font_size: 9}
-                ag_log_box := ScrollYView{width: Fill height: 168 flow: Down spacing: 4
+                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 6
+                    vc_mic := MicBtn{text: "🎙 说话" on_click: || vc_toggle()}
+                    ChipBtn{text: "念这一期" on_click: || vc_brief()}
+                    vc_autob := ChipBtn{text: "自动朗读" on_click: || vc_toggle_auto()}
+                }
+                vc_note := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x9fb0d0 draw_text.text_style.font_size: 10}
+                ag_log_box := ScrollYView{width: Fill height: 230 flow: Down spacing: 4
                     on_render: || {
                         if ag_log.len() == 0 {
                             Label{width: Fill text: "试着对我说：只看芯片和 AI，生成今天的晨报。" draw_text.color: #x7c8db0 draw_text.text_style.font_size: 11}
@@ -2318,10 +2886,13 @@ HostedView{width: Fill height: Fill
                 View{width: Fill height: Fit flow: Right spacing: 6
                     ChipBtn{text: "生成今天这份" on_click: || ag_say("生成今天这份晨报")}
                     ChipBtn{text: "只看 AI 和芯片" on_click: || ag_say("只看 AI 和芯片，生成今天的晨报")}
-                    ChipBtn{text: "这一期讲了什么" on_click: || ag_say("这一期讲了什么？")}
+                    ChipBtn{text: "报过什么" on_click: || ag_say("查一下本报档案里关于 AI 的报道")}
                 }
             }
             View{width: Fill height: Fit flow: Right align: Align{x: 1.0} spacing: 8 padding: Inset{left: 12 right: 12 bottom: 12 top: 4}
+                vc_pill_mic := PillBtn{visible: false text: "🎙" on_click: || vc_toggle()}
+                arc_pill := Label{width: 160 text: "" draw_text.color: #x6c7d9e draw_text.text_style.font_size: 9}
+                View{width: Fill height: 1}
                 ag_pill := PillBtn{text: "● AI 主编" on_click: || ag_toggle()}
             }
         }
