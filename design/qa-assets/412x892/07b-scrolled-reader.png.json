@@ -1,0 +1,405 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ce",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      822
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "story_pane",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      822
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      93
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      10,
+      8,
+      388,
+      50
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      10,
+      11,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "返回晨报"
+  },
+  {
+    "i": "story_pos",
+    "ty": "Label",
+    "r": [
+      97,
+      24,
+      161,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "第 1 / 3 条"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      264,
+      11,
+      64,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "上一条"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      334,
+      11,
+      64,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "下一条"
+  },
+  {
+    "i": "story_title",
+    "ty": "Label",
+    "r": [
+      10,
+      64,
+      388,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地测试：AI 开源技术的长标题阅读体验——从模型训练、推理成本、应用部署到读者最关心的实际变化，这是一条需要完整阅读而不能挤占全部屏幕的新闻标题"
+  },
+  {
+    "i": "story_frame",
+    "ty": "View",
+    "r": [
+      0,
+      93,
+      412,
+      729
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "story_content",
+    "ty": "View",
+    "r": [
+      0,
+      93,
+      412,
+      729
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "art_pane",
+    "ty": "View",
+    "r": [
+      20,
+      93,
+      372,
+      53
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      20,
+      93,
+      372,
+      53
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      20,
+      93,
+      372,
+      53
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      20,
+      93,
+      372,
+      1
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地 UI 素材，仅用于版式检查"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      20,
+      97,
+      76,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "重画"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      104,
+      97,
+      76,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "收起"
+  },
+  {
+    "i": "story_sum_box",
+    "ty": "View",
+    "r": [
+      20,
+      162,
+      372,
+      660
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      40,
+      174,
+      332,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "官方摘要"
+  },
+  {
+    "i": "story_sum",
+    "ty": "Label",
+    "r": [
+      40,
+      201,
+      332,
+      621
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      0,
+      822,
+      412,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      822,
+      412,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      18,
+      847,
+      173,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      18,
+      847,
+      173,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      201,
+      835,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：关"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      293,
+      835,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]

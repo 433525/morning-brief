@@ -1,0 +1,446 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      1280,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      1280,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ce",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      1280,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      830
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "story_pane",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      830
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      93
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      270,
+      8,
+      736,
+      50
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      270,
+      11,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "返回晨报"
+  },
+  {
+    "i": "story_pos",
+    "ty": "Label",
+    "r": [
+      357,
+      24,
+      509,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "第 2 / 3 条"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      872,
+      11,
+      64,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "上一条"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      942,
+      11,
+      64,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "下一条"
+  },
+  {
+    "i": "story_title",
+    "ty": "Label",
+    "r": [
+      270,
+      64,
+      736,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "Open-source AI agents: a deliberately long headline covering infrastructure, evaluation, deployment, and real-world reliability for the native reading layout"
+  },
+  {
+    "i": "story_frame",
+    "ty": "View",
+    "r": [
+      260,
+      93,
+      760,
+      737
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "story_content",
+    "ty": "View",
+    "r": [
+      260,
+      93,
+      760,
+      737
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "full_title",
+    "ty": "Label",
+    "r": [
+      280,
+      93,
+      720,
+      107
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "Open-source AI agents: a deliberately long headline covering infrastructure, evaluation, deployment, and real-world reliability for the native reading layout"
+  },
+  {
+    "i": "story_meta",
+    "ty": "Label",
+    "r": [
+      280,
+      216,
+      720,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地测试数据  ·  15m ago"
+  },
+  {
+    "i": "art_pane",
+    "ty": "View",
+    "r": [
+      280,
+      251,
+      720,
+      285
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      280,
+      251,
+      720,
+      285
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Image",
+    "r": [
+      280,
+      251,
+      720,
+      210
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      280,
+      467,
+      720,
+      69
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      280,
+      467,
+      720,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地 UI 素材，仅用于版式检查"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      280,
+      488,
+      76,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "重画"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      364,
+      488,
+      76,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "收起"
+  },
+  {
+    "i": "story_sum_box",
+    "ty": "View",
+    "r": [
+      280,
+      553,
+      720,
+      277
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      300,
+      565,
+      680,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "官方摘要"
+  },
+  {
+    "i": "story_sum",
+    "ty": "Label",
+    "r": [
+      300,
+      592,
+      680,
+      238
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      260,
+      830,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      260,
+      830,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      278,
+      855,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      278,
+      855,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      809,
+      843,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：关"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      901,
+      843,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]

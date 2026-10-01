@@ -1,0 +1,313 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      768,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      768,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "cd",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      768,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      4,
+      0,
+      760,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      4,
+      0,
+      760,
+      954
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "decision_surface",
+    "ty": "View",
+    "r": [
+      4,
+      0,
+      760,
+      954
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      24,
+      20,
+      720,
+      38
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "晨报卡 · 编辑部"
+  },
+  {
+    "i": "plan_pane",
+    "ty": "View",
+    "r": [
+      24,
+      76,
+      720,
+      327
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      42,
+      96,
+      684,
+      31
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "请确认这期取数计划"
+  },
+  {
+    "i": "plan_ask",
+    "ty": "Label",
+    "r": [
+      42,
+      139,
+      684,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "关注：AI、开源"
+  },
+  {
+    "i": "plan_topics",
+    "ty": "Label",
+    "r": [
+      42,
+      172,
+      684,
+      48
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "Hacker News 首页 30 条 · TechMeme 最新条目。\n从最近 16 个候选中选稿。"
+  },
+  {
+    "i": "plan_limit",
+    "ty": "Label",
+    "r": [
+      42,
+      233,
+      684,
+      23
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "条数上限：10 条"
+  },
+  {
+    "i": "plan_ai",
+    "ty": "Label",
+    "r": [
+      42,
+      267,
+      684,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 未启用，本期按主题和时间筛选。"
+  },
+  {
+    "i": "plan_hosts",
+    "ty": "Label",
+    "r": [
+      42,
+      300,
+      684,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "将发起网络请求的域名：hn.algolia.com、www.techmeme.com"
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      42,
+      331,
+      684,
+      52
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      42,
+      334,
+      136,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "批准并取数"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      188,
+      334,
+      116,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "暂不取数"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      4,
+      954,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      4,
+      954,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      22,
+      979,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      22,
+      979,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      553,
+      967,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：开"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      645,
+      967,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]

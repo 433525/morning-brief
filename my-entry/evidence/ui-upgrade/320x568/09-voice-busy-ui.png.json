@@ -1,0 +1,516 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "cd",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      198
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "browse",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      198
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      20,
+      20,
+      280,
+      167
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      42,
+      42,
+      236,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      42,
+      42,
+      141,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "MORNING BRIEF"
+  },
+  {
+    "i": "date",
+    "ty": "Label",
+    "r": [
+      191,
+      42,
+      87,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "2026 / 10 / 2"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      42,
+      73,
+      236,
+      55
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "晨报卡"
+  },
+  {
+    "i": "2",
+    "ty": "Label",
+    "r": [
+      42,
+      141,
+      236,
+      23
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "世界在更新，你的晨报已就位"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      0,
+      198,
+      320,
+      370
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ag_panel",
+    "ty": "View",
+    "r": [
+      0,
+      198,
+      320,
+      300
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      18,
+      212,
+      284,
+      50
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Image",
+    "r": [
+      18,
+      215,
+      29,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      57,
+      212,
+      131,
+      50
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      57,
+      212,
+      131,
+      28
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "ag_note",
+    "ty": "Label",
+    "r": [
+      57,
+      243,
+      131,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": " "
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      199,
+      215,
+      47,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "清空"
+  },
+  {
+    "i": "3",
+    "ty": "Button",
+    "r": [
+      255,
+      215,
+      47,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "收起"
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      18,
+      272,
+      284,
+      50
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "vc_mic",
+    "ty": "Button",
+    "r": [
+      18,
+      275,
+      84,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "🎙 说话"
+  },
+  {
+    "i": "vc_read",
+    "ty": "Button",
+    "r": [
+      108,
+      275,
+      93,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "念这一期"
+  },
+  {
+    "i": "vc_autob",
+    "ty": "Button",
+    "r": [
+      207,
+      275,
+      93,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "朗读：开"
+  },
+  {
+    "i": "vc_note",
+    "ty": "Label",
+    "r": [
+      18,
+      332,
+      284,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地 UI 测试：模拟双语音能力"
+  },
+  {
+    "i": "ag_log_box",
+    "ty": "View",
+    "r": [
+      18,
+      359,
+      284,
+      65
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      18,
+      359,
+      284,
+      63
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      30,
+      369,
+      260,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "你"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      30,
+      392,
+      260,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地测试消息"
+  },
+  {
+    "i": "2",
+    "ty": "View",
+    "r": [
+      18,
+      434,
+      284,
+      52
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ag_in",
+    "ty": "TextInput",
+    "r": [
+      18,
+      437,
+      200,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "对主编说一句话…",
+    "val": ""
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      226,
+      437,
+      76,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "发送"
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      498,
+      320,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      18,
+      523,
+      99,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      18,
+      523,
+      99,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "处理中"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      127,
+      511,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：开"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      218,
+      511,
+      84,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "处理中"
+  }
+]

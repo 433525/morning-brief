@@ -1,0 +1,593 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      1280,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      1280,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ce",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      1280,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      900
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      830
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "run_pane",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      830
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      260,
+      0,
+      760,
+      63
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "status_line",
+    "ty": "Label",
+    "r": [
+      280,
+      16,
+      644,
+      35
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "已完成。"
+  },
+  {
+    "i": "st_gen",
+    "ty": "Label",
+    "r": [
+      932,
+      25,
+      68,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "10/2 04:38"
+  },
+  {
+    "i": "list",
+    "ty": "View",
+    "r": [
+      260,
+      63,
+      760,
+      767
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      280,
+      63,
+      720,
+      111
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ai_sum",
+    "ty": "Label",
+    "r": [
+      280,
+      63,
+      720,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "离线模式：没有调用 AI，按你勾选的主题做规则筛选"
+  },
+  {
+    "i": "ai_intro",
+    "ty": "Label",
+    "r": [
+      280,
+      90,
+      720,
+      23
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本页使用隔离的本地测试数据，检查头版、新闻列表、长标题与阅读排版。"
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      280,
+      120,
+      720,
+      54
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "pipe_line",
+    "ty": "Label",
+    "r": [
+      290,
+      128,
+      700,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "按所选主题和发布时间筛选。"
+  },
+  {
+    "i": "st_src",
+    "ty": "Label",
+    "r": [
+      290,
+      149,
+      700,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "取用 本地 fixture 3 条 · 上限 10 条"
+  },
+  {
+    "i": "news_cards",
+    "ty": "View",
+    "r": [
+      280,
+      190,
+      720,
+      640
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      280,
+      190,
+      720,
+      224
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Image",
+    "r": [
+      280,
+      190,
+      720,
+      224
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      280,
+      190,
+      720,
+      224
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "2",
+    "ty": "View",
+    "r": [
+      280,
+      190,
+      720,
+      224
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      300,
+      202,
+      680,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      300,
+      202,
+      337,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "今日头版"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      643,
+      203,
+      337,
+      16
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地 UI 素材，仅用于版式检查"
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      300,
+      225,
+      680,
+      82
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "2",
+    "ty": "Label",
+    "r": [
+      300,
+      314,
+      680,
+      36
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "LOCAL PREVIEW · 本地版式测试"
+  },
+  {
+    "i": "3",
+    "ty": "View",
+    "r": [
+      300,
+      356,
+      680,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      872,
+      359,
+      108,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "换一张头版"
+  },
+  {
+    "i": "1",
+    "ty": "GestureView",
+    "r": [
+      280,
+      426,
+      720,
+      201
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      280,
+      426,
+      720,
+      201
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "rm",
+    "ty": "Label",
+    "r": [
+      298,
+      444,
+      684,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "01 · 本地测试数据  ·  just now"
+  },
+  {
+    "i": "rt",
+    "ty": "Label",
+    "r": [
+      298,
+      472,
+      684,
+      86
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地测试：AI 开源技术的长标题阅读体验——从模型训练、推理成本、应用部署到读者最关心的实际变化，这是一条需要完整阅读而不能挤占全部屏幕的新闻标题"
+  },
+  {
+    "i": "rsu",
+    "ty": "Label",
+    "r": [
+      298,
+      565,
+      684,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
+  },
+  {
+    "i": "2",
+    "ty": "GestureView",
+    "r": [
+      280,
+      639,
+      720,
+      191
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      280,
+      639,
+      720,
+      191
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "rm",
+    "ty": "Label",
+    "r": [
+      298,
+      657,
+      684,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "02 · 本地测试数据  ·  15m ago"
+  },
+  {
+    "i": "rt",
+    "ty": "Label",
+    "r": [
+      298,
+      685,
+      684,
+      86
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "Open-source AI agents: a deliberately long headline covering infrastructure, evaluation, deployment, and real-world reliability for the native reading layout"
+  },
+  {
+    "i": "rsu",
+    "ty": "Label",
+    "r": [
+      298,
+      778,
+      684,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      260,
+      830,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      260,
+      830,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      278,
+      855,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      278,
+      855,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      809,
+      843,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：关"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      901,
+      843,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]

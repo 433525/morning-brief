@@ -1,0 +1,384 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "bd",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "browse",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      14,
+      14,
+      292,
+      164
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "date",
+    "ty": "Label",
+    "r": [
+      31,
+      31,
+      258,
+      24
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "尚未生成"
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      31,
+      64,
+      258,
+      48
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "晨报卡"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      31,
+      120,
+      258,
+      41
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "MORNING BRIEF · AI EDITION · 常驻主编在线"
+  },
+  {
+    "i": "intent_line",
+    "ty": "Label",
+    "r": [
+      17,
+      191,
+      286,
+      52
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "意图：只要 AI、开源 相关，10 条以内"
+  },
+  {
+    "i": "hint_line",
+    "ty": "Label",
+    "r": [
+      17,
+      259,
+      286,
+      41
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这份报会记住你读过的内容，越读越懂你；右下角「AI 主编」可以说话、可以查本报档案"
+  },
+  {
+    "i": "ask_in",
+    "ty": "TextInput",
+    "r": [
+      14,
+      316,
+      292,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "也可以直接写，例如：我想看芯片和 AI 的大新闻",
+    "val": ""
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      14,
+      369,
+      292,
+      38
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "chip_ai",
+    "ty": "Button",
+    "r": [
+      14,
+      372,
+      66,
+      32
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "[x] AI"
+  },
+  {
+    "i": "chip_oss",
+    "ty": "Button",
+    "r": [
+      86,
+      372,
+      83,
+      32
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "[x] 开源"
+  },
+  {
+    "i": "chip_sec",
+    "ty": "Button",
+    "r": [
+      175,
+      372,
+      78,
+      32
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "[ ] 安全"
+  },
+  {
+    "i": "chip_chip",
+    "ty": "Button",
+    "r": [
+      259,
+      372,
+      47,
+      32
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "[ ] 芯片"
+  },
+  {
+    "i": "2",
+    "ty": "View",
+    "r": [
+      14,
+      417,
+      292,
+      36
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      17,
+      423,
+      70,
+      25
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "条数上限"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      98,
+      420,
+      32,
+      30
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "-"
+  },
+  {
+    "i": "limit_label",
+    "ty": "Label",
+    "r": [
+      141,
+      420,
+      30,
+      30
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "10"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      182,
+      420,
+      36,
+      30
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "+"
+  },
+  {
+    "i": "gen_pane",
+    "ty": "View",
+    "r": [
+      14,
+      463,
+      292,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      14,
+      466,
+      116,
+      41
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "生成晨报"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      512,
+      320,
+      56
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "arc_pill",
+    "ty": "Label",
+    "r": [
+      15,
+      519,
+      160,
+      20
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": " "
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      186,
+      516,
+      4,
+      1
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      198,
+      519,
+      110,
+      34
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "● AI 主编"
+  }
+]

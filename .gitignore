@@ -26,6 +26,7 @@ _video_frames/
 
 # 运行期状态
 .local-state/
+.local-tools/
 *.pyc
 __pycache__/
 

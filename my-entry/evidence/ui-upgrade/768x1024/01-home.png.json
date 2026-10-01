@@ -1,0 +1,586 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      768,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      768,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "cd",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      768,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      4,
+      0,
+      760,
+      1024
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      4,
+      0,
+      760,
+      954
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "browse",
+    "ty": "View",
+    "r": [
+      4,
+      0,
+      760,
+      954
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      24,
+      20,
+      720,
+      167
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      46,
+      42,
+      676,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      46,
+      42,
+      581,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "MORNING BRIEF"
+  },
+  {
+    "i": "date",
+    "ty": "Label",
+    "r": [
+      635,
+      42,
+      87,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "2026 / 10 / 2"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      46,
+      73,
+      676,
+      55
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "晨报卡"
+  },
+  {
+    "i": "2",
+    "ty": "Label",
+    "r": [
+      46,
+      141,
+      676,
+      23
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "世界在更新，你来定重点"
+  },
+  {
+    "i": "settings_pane",
+    "ty": "View",
+    "r": [
+      24,
+      205,
+      720,
+      432
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      42,
+      225,
+      684,
+      68
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      42,
+      230,
+      627,
+      59
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      42,
+      230,
+      627,
+      33
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "今天，想关注什么？"
+  },
+  {
+    "i": "hint_line",
+    "ty": "Label",
+    "r": [
+      42,
+      268,
+      627,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "选几个主题，或写下你想了解的事。"
+  },
+  {
+    "i": "1",
+    "ty": "Image",
+    "r": [
+      681,
+      225,
+      45,
+      68
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "topic_buttons",
+    "ty": "View",
+    "r": [
+      42,
+      309,
+      684,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "chip_ai",
+    "ty": "Button",
+    "r": [
+      42,
+      312,
+      62,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "✓ AI"
+  },
+  {
+    "i": "chip_oss",
+    "ty": "Button",
+    "r": [
+      112,
+      312,
+      79,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "✓ 开源"
+  },
+  {
+    "i": "chip_sec",
+    "ty": "Button",
+    "r": [
+      199,
+      312,
+      59,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "安全"
+  },
+  {
+    "i": "chip_chip",
+    "ty": "Button",
+    "r": [
+      265,
+      312,
+      59,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "芯片"
+  },
+  {
+    "i": "ask_in",
+    "ty": "TextInput",
+    "r": [
+      42,
+      374,
+      684,
+      48
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "例如：AI 和芯片，哪些进展值得关注？",
+    "val": ""
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      42,
+      441,
+      684,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      42,
+      454,
+      547,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "每期条数上限"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      599,
+      444,
+      40,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "−"
+  },
+  {
+    "i": "limit_label",
+    "ty": "Label",
+    "r": [
+      649,
+      449,
+      27,
+      29
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "10"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      686,
+      444,
+      40,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "+"
+  },
+  {
+    "i": "intent_line",
+    "ty": "Label",
+    "r": [
+      42,
+      503,
+      684,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "意图：只要 AI、开源 相关，10 条以内"
+  },
+  {
+    "i": "gen_pane",
+    "ty": "View",
+    "r": [
+      42,
+      538,
+      684,
+      79
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      42,
+      541,
+      684,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "准备今天的晨报"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      42,
+      598,
+      684,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "先确认取数计划，再开始联网。"
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      24,
+      655,
+      720,
+      120
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      42,
+      673,
+      684,
+      24
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "来自信息流，经过编辑部。"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      42,
+      707,
+      684,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "Hacker News · TechMeme"
+  },
+  {
+    "i": "2",
+    "ty": "Label",
+    "r": [
+      42,
+      737,
+      684,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "每条保留来源和原文。少一些噪声，多一些值得读的事。"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      4,
+      954,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      4,
+      954,
+      760,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      22,
+      979,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      22,
+      979,
+      521,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      553,
+      967,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：开"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      645,
+      967,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]
