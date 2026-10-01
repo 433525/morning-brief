@@ -365,15 +365,15 @@ fn trail_text(){
     let last = it[n - 1]
     let j = last["judge"]
     if j != nil {
-        let jm = j["model"]
-        let jms = j["ms"]
-        if jm != nil { out = out + "。最近一期终审用 " + ("" + jm) }
-        if jms != nil { out = out + "，耗时 " + ("" + jms) + " 毫秒" }
+        let jm = s_of(j, "model")
+        let jms = s_of(j, "ms")
+        if jm != "" { out = out + "。最近一期终审用 " + jm }
+        if jms != "" { out = out + "，耗时 " + jms + " 毫秒" }
     }
     let ch = last["charter"]
     if ch != nil {
-        let vv = ch["judge"]
-        if vv != nil { out = out + "，照 judge/" + ("" + vv) + " 版规矩取舍" }
+        let vv = s_of(ch, "judge")
+        if vv != "" { out = out + "，照 judge/" + vv + " 版规矩取舍" }
     }
     out = out + "。要逐项看候选池、三位初审的原话和主编取舍，用 read_trail。"
     out
@@ -422,38 +422,60 @@ fn replay_panel_line(){
     if pn == nil { return "初审：这一期没有留痕" }
     let out = "三位初审各自的原话（互不商量）："
     for p in pn {
-        let lb = p["label"]
-        let dg = p["digest"]
-        if dg == nil { dg = "" }
-        out = out + "\n· " + ("" + lb) + "：" + ("" + dg)
+        let lb = s_of(p, "label")
+        let dg = s_of(p, "digest")
+        if dg == "" { dg = "（这位编辑这次没有留下点评）" }
+        out = out + "\n· " + lb + "：" + dg
     }
     out
+}
+
+// 安全取字符串：字段缺失或类型不对时返回空串，绝不把 nil 拼进 art_cut
+// （本项目历史上踩过「JSON 缺字段直接取属性会抛错」的坑，这里统一走这个口）
+fn s_of(o, k){
+    if o == nil { return "" }
+    let v = o[k]
+    if v == nil { return "" }
+    "" + v
 }
 
 fn replay_judge_line(){
     let t = replay_now()
     if t.len() == 0 { return "" }
+    let res = t["result"]
+    let refused = false
+    if res != nil {
+        let rv = res["refused"]
+        if rv != nil { if rv { refused = true } }
+    }
     let j = t["judge"]
     if j == nil { return "" }
     let out = "主编终审原话："
     let intro = j["intro"]
+    if refused {
+        // 拒刊那期没有导语，intro 存的是主编的拒刊理由
+        out = "主编决定：今日休刊"
+        if intro != nil && intro != "" { out = out + "\n理由：" + art_cut("" + intro, 90) }
+        out = out + "\n（本期没有出报，读者可以用「仍要出报」否决这个决定）"
+        return out
+    }
     if intro != nil && intro != "" { out = out + "\n导语：" + art_cut("" + intro, 90) }
     let ps = j["picks"]
     if ps != nil {
         let i = 1
         for p in ps {
-            out = out + "\n" + ("" + i) + ". " + art_cut("" + p["title"], 40)
-            let wy = p["why"]
-            if wy != nil && wy != "" { out = out + "\n　为什么上：" + art_cut("" + wy, 50) }
+            out = out + "\n" + ("" + i) + ". " + art_cut(s_of(p, "title"), 40)
+            let wy = s_of(p, "why")
+            if wy != "" { out = out + "\n　为什么上：" + art_cut(wy, 50) }
             i = i + 1
         }
     }
     let dl = j["drops"]
     if dl != nil && dl.len() > 0 {
         for d in dl {
-            out = out + "\n砍：" + art_cut("" + d["title"], 36)
-            let wy = d["why"]
-            if wy != nil && wy != "" { out = out + " —— " + art_cut("" + wy, 40) }
+            out = out + "\n砍：" + art_cut(s_of(d, "title"), 36)
+            let wy = s_of(d, "why")
+            if wy != "" { out = out + " —— " + art_cut(wy, 40) }
         }
     }
     out
@@ -3582,6 +3604,11 @@ fn run_brief(){
     if refuse_check() {
         phase = "refused"
         busy = false
+        // 拒刊也是这一期的编辑部决策，照样留痕 ——
+        // 「今天为什么没出报」和「今天为什么选这五条」一样值得被回放
+        trail["result"] = {picked: 0 refused: true}
+        trail["judge"] = {model: "" ms: 0 intro: refuse_why picks: [] drops: []}
+        trail_save()
         sync_ui()
         return
     }
@@ -3617,7 +3644,7 @@ fn finish(){
     busy = false
     // 留痕：候选池 / 初审 / 终审三层的快照先落地，
     // 后面 cover、forecast、factcheck 各自回来时再补写（trail_save 会覆盖同一期）
-    trail["result"] = {picked: picked.len() refused: false}
+    trail["result"] = {picked: picked.len() refused: false}   // 正常出报；拒刊路径在 run_brief() 里单独落
     trail_save()
     sync_ui()
     if picked.len() > 0 { start_timeout(2.5, || cover_kick()) }
@@ -3770,6 +3797,9 @@ fn restart(){
     th_up = []
     clash_state = ""
     clash_note = ""
+    // 重新开始时把留痕也清掉：否则回放卡会继续显示上一期的过程
+    trail = {}
+    trail_msg = ""
     sync_ui()
 }
 
