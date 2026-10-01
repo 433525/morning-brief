@@ -1,0 +1,119 @@
+name: auto-merge
+
+# 「全同意」的机器实现：任何人（含 fork 来的陌生人）开的 PR，
+# 只要语法体检变绿，就自动 squash 合并进 master —— 维护者不用点任何按钮。
+#
+# 两条安全护栏：
+#   1. 动了 .github/ 的 PR 不自动合并（工作流文件能提权，必须人工过目），并自动留言说明；
+#   2. 只合并「当前 HEAD 就是这次体检的那个提交」的 PR（体检后又推新提交的，跳过等下一次）。
+on:
+  workflow_run:
+    workflows: ["check"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 合并通过体检的 PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+
+            // 找出这次体检对应的 PR；workflow_run 负载里没带就按分支反查
+            let candidates = (run.pull_requests || [])
+              .map(p => ({ number: p.number, ranHeadSha: p.head && p.head.sha ? p.head.sha : null }));
+            if (!candidates.length && run.head_repository) {
+              const { data } = await github.rest.pulls.list({
+                owner, repo, state: 'open',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+              });
+              candidates = data.map(p => ({ number: p.number, ranHeadSha: null }));
+            }
+            if (!candidates.length) {
+              console.log('这次体检没有对应的 PR，无需处理');
+              return;
+            }
+
+            for (const cand of candidates) {
+              const num = cand.number;
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: num });
+
+              if (pr.state !== 'open') { console.log(`#${num}: 已关闭，跳过`); continue; }
+              if (pr.draft) { console.log(`#${num}: 草稿，跳过`); continue; }
+              if (cand.ranHeadSha && pr.head.sha !== cand.ranHeadSha) {
+                console.log(`#${num}: 体检后又推了新提交，跳过（等下一次体检）`);
+                continue;
+              }
+
+              // 护栏 1：.github/ 里的文件不自动合并
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: num, per_page: 100,
+              });
+              const protectedFiles = files
+                .map(f => f.filename)
+                .filter(name => name.startsWith('.github/'));
+              if (protectedFiles.length) {
+                console.log(`#${num}: 动了受保护路径 ${protectedFiles.join(', ')}，跳过自动合并`);
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: num,
+                  body: `🤖 **自动合并已跳过**：这个 PR 动了 \`.github/\` 里的文件（${protectedFiles.map(p => '`' + p + '`').join('、')}）。\n\n工作流文件的改动有可能影响仓库权限，必须由维护者人工过目后手动合并；其余内容没有问题的话，请维护者手动合并即可。`,
+                });
+                continue;
+              }
+
+              // 护栏 2（TOCTOU）：合并前复查可合并状态，最多试 5 轮
+              let merged = false;
+              for (let i = 0; i < 5 && !merged; i++) {
+                const { data: now } = await github.rest.pulls.get({ owner, repo, pull_number: num });
+                if (now.merged) { merged = true; break; }
+                if (['clean', 'unstable', 'has_hooks'].includes(now.mergeable_state)) {
+                  try {
+                    const res = await github.rest.pulls.merge({
+                      owner, repo, pull_number: num, merge_method: 'squash',
+                    });
+                    console.log(`#${num}: 已自动合并 → ${res.data.sha}`);
+                    merged = true;
+                  } catch (e) {
+                    console.log(`#${num}: 第 ${i + 1} 次合并失败：${e.message}`);
+                    await new Promise(r => setTimeout(r, 5000));
+                  }
+                } else {
+                  console.log(`#${num}: 尚不可合并（${now.mergeable_state}），等待中…`);
+                  await new Promise(r => setTimeout(r, 5000));
+                }
+              }
+              if (!merged) console.log(`#${num}: 放弃自动合并，留给维护者手动处理`);
+            }
+
+  on-failure:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 体检没过时给 PR 留个言
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            let candidates = (run.pull_requests || []).map(p => p.number);
+            if (!candidates.length && run.head_repository) {
+              const { data } = await github.rest.pulls.list({
+                owner, repo, state: 'open',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+              });
+              candidates = data.map(p => p.number);
+            }
+            for (const num of candidates) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: num,
+                body: `❌ **语法体检没有通过**，先看看流水线日志：${run.html_url}\n\n本地可以先跑 \`python tools/brace.py\` 定位问题（退出码 1 = 有问题），修好再 push，这次会自动重跑。`,
+              });
+            }

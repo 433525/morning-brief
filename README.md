@@ -81,7 +81,9 @@ git push
 - **接力任务（GitHub Issue #1）**：https://github.com/jscjscjscjscjsc/morning-brief/issues/1
   —— 后来的人/AI agent 看这一条就知道背景与下一步。
 - **AI agent 入口**：仓库根目录的 `AGENTS.md`（背景 / 状态 / 环境 / 红线 / 贡献流程）。
-- 提交改动：开 `round-<轮次>/<主题>` 分支 → PR（模板已备好）→ 维护者默认全同意。
+- 提交改动：成员可直接开 `round-<轮次>/<主题>` 分支推 PR；非成员 fork 后向上游提 PR 即可，
+  **不用申请成员、不用等任何人批准**。
+- **零操作合并**：只要语法体检（CI）变绿，PR 自动合并进 master；动了 `.github/` 的除外（需人工过目）。
 
 ## 贡献指南（欢迎继续改）
 
