@@ -1,0 +1,416 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "d3",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      568
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      498
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "run_pane",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      498
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      320,
+      63
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "status_line",
+    "ty": "Label",
+    "r": [
+      20,
+      16,
+      204,
+      35
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "已完成。"
+  },
+  {
+    "i": "st_gen",
+    "ty": "Label",
+    "r": [
+      232,
+      25,
+      68,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "10/2 11:00"
+  },
+  {
+    "i": "list",
+    "ty": "View",
+    "r": [
+      0,
+      63,
+      320,
+      435
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "news_cards",
+    "ty": "View",
+    "r": [
+      20,
+      63,
+      280,
+      435
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "3",
+    "ty": "GestureView",
+    "r": [
+      20,
+      67,
+      280,
+      201
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      20,
+      67,
+      280,
+      201
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "rm",
+    "ty": "Label",
+    "r": [
+      38,
+      85,
+      244,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "02 · 本地测试数据  ·  15分钟前"
+  },
+  {
+    "i": "rt",
+    "ty": "Label",
+    "r": [
+      38,
+      113,
+      244,
+      86
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "Open-source AI agents: a deliberately long headline covering infrastructure, evaluation, deployment, and real-world reliability for the native reading layout"
+  },
+  {
+    "i": "rsu",
+    "ty": "Label",
+    "r": [
+      38,
+      206,
+      244,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
+  },
+  {
+    "i": "4",
+    "ty": "View",
+    "r": [
+      20,
+      280,
+      280,
+      1
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "5",
+    "ty": "GestureView",
+    "r": [
+      20,
+      293,
+      280,
+      205
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      20,
+      293,
+      280,
+      205
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "col",
+    "ty": "View",
+    "r": [
+      38,
+      311,
+      158,
+      187
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "rm",
+    "ty": "Label",
+    "r": [
+      38,
+      311,
+      158,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "03 · 本地测试数据  ·  30分钟前"
+  },
+  {
+    "i": "rt",
+    "ty": "Label",
+    "r": [
+      38,
+      363,
+      158,
+      86
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地测试：芯片与算力，三位编辑会怎样判断"
+  },
+  {
+    "i": "rsu",
+    "ty": "Label",
+    "r": [
+      38,
+      456,
+      158,
+      42
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
+  },
+  {
+    "i": "rth",
+    "ty": "Image",
+    "r": [
+      206,
+      311,
+      76,
+      76
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      0,
+      498,
+      320,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      498,
+      320,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      513,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      47,
+      523,
+      63,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      47,
+      523,
+      63,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "AI 主编"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      117,
+      511,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：关"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      207,
+      511,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]

@@ -26,7 +26,7 @@
     "enabled": true
   },
   {
-    "i": "cd",
+    "i": "d2",
     "ty": "HostedView",
     "r": [
       0,
@@ -81,10 +81,10 @@
     "i": "-",
     "ty": "View",
     "r": [
-      20,
-      20,
-      280,
-      167
+      16,
+      16,
+      288,
+      109
     ],
     "w": 0,
     "window_id": "main_window",
@@ -94,10 +94,10 @@
     "i": "-",
     "ty": "View",
     "r": [
-      42,
-      42,
-      236,
-      19
+      34,
+      32,
+      252,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
@@ -107,10 +107,10 @@
     "i": "-",
     "ty": "Label",
     "r": [
-      42,
-      42,
-      141,
-      19
+      34,
+      32,
+      165,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
@@ -121,10 +121,10 @@
     "i": "date",
     "ty": "Label",
     "r": [
-      191,
-      42,
-      87,
-      19
+      207,
+      32,
+      79,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
@@ -133,12 +133,25 @@
   },
   {
     "i": "1",
+    "ty": "View",
+    "r": [
+      34,
+      57,
+      252,
+      52
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
     "ty": "Label",
     "r": [
-      42,
-      73,
-      236,
-      55
+      34,
+      57,
+      173,
+      52
     ],
     "w": 0,
     "window_id": "main_window",
@@ -146,27 +159,27 @@
     "t": "晨报卡"
   },
   {
-    "i": "2",
+    "i": "1",
     "ty": "Label",
     "r": [
-      42,
-      141,
-      236,
-      23
+      219,
+      92,
+      67,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "世界在更新，你来定重点"
+    "t": "破晓编辑部"
   },
   {
     "i": "settings_pane",
     "ty": "View",
     "r": [
-      20,
-      205,
-      280,
-      293
+      16,
+      141,
+      288,
+      307
     ],
     "w": 0,
     "window_id": "main_window",
@@ -176,10 +189,10 @@
     "i": "-",
     "ty": "View",
     "r": [
-      38,
-      225,
-      244,
-      117
+      16,
+      147,
+      288,
+      29
     ],
     "w": 0,
     "window_id": "main_window",
@@ -189,10 +202,10 @@
     "i": "-",
     "ty": "View",
     "r": [
-      38,
-      225,
-      187,
-      117
+      16,
+      147,
+      288,
+      29
     ],
     "w": 0,
     "window_id": "main_window",
@@ -202,51 +215,24 @@
     "i": "-",
     "ty": "Label",
     "r": [
-      38,
-      225,
-      187,
-      68
+      16,
+      147,
+      288,
+      29
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "今天，想关注什么？"
-  },
-  {
-    "i": "hint_line",
-    "ty": "Label",
-    "r": [
-      38,
-      298,
-      187,
-      45
-    ],
-    "w": 0,
-    "window_id": "main_window",
-    "enabled": true,
-    "t": "选几个主题，或写下你想了解的事。"
-  },
-  {
-    "i": "1",
-    "ty": "Image",
-    "r": [
-      237,
-      250,
-      45,
-      68
-    ],
-    "w": 0,
-    "window_id": "main_window",
-    "enabled": true
+    "t": "今天想读什么？"
   },
   {
     "i": "topic_buttons",
     "ty": "View",
     "r": [
-      38,
-      358,
-      244,
-      92
+      16,
+      187,
+      288,
+      46
     ],
     "w": 0,
     "window_id": "main_window",
@@ -256,8 +242,8 @@
     "i": "chip_ai",
     "ty": "Button",
     "r": [
-      38,
-      361,
+      16,
+      190,
       62,
       40
     ],
@@ -270,8 +256,8 @@
     "i": "chip_oss",
     "ty": "Button",
     "r": [
-      108,
-      361,
+      86,
+      190,
       79,
       40
     ],
@@ -284,8 +270,8 @@
     "i": "chip_sec",
     "ty": "Button",
     "r": [
-      195,
-      361,
+      173,
+      190,
       59,
       40
     ],
@@ -298,8 +284,8 @@
     "i": "chip_chip",
     "ty": "Button",
     "r": [
-      38,
-      407,
+      239,
+      190,
       59,
       40
     ],
@@ -312,16 +298,167 @@
     "i": "ask_in",
     "ty": "TextInput",
     "r": [
-      38,
-      469,
-      244,
+      16,
+      246,
+      288,
+      48
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "例如：AI 和芯片的新进展",
+    "val": ""
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      16,
+      307,
+      288,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      16,
+      319,
+      151,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "每期条数上限"
+  },
+  {
+    "i": "1",
+    "ty": "Button",
+    "r": [
+      177,
+      310,
+      40,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "−"
+  },
+  {
+    "i": "limit_label",
+    "ty": "Label",
+    "r": [
+      227,
+      315,
+      27,
       29
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "例如：AI 和芯片，哪些进展值得关注？",
-    "val": ""
+    "t": "10"
+  },
+  {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      264,
+      310,
+      40,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "+"
+  },
+  {
+    "i": "gen_pane",
+    "ty": "View",
+    "r": [
+      16,
+      363,
+      288,
+      79
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Button",
+    "r": [
+      16,
+      366,
+      288,
+      46
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "准备今天的晨报"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      16,
+      423,
+      288,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "先确认取数计划，再开始联网。"
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      16,
+      464,
+      288,
+      34
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      16,
+      470,
+      288,
+      17
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "公开来源 · Hacker News / TechMeme"
+  },
+  {
+    "i": "1",
+    "ty": "Label",
+    "r": [
+      16,
+      492,
+      288,
+      6
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "保留出处，选稿过程可查看。"
   },
   {
     "i": "ag_dock",
@@ -351,11 +488,24 @@
   },
   {
     "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      513,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
     "ty": "View",
     "r": [
-      18,
+      47,
       523,
-      81,
+      63,
       21
     ],
     "w": 0,
@@ -366,9 +516,9 @@
     "i": "editor_state",
     "ty": "Label",
     "r": [
-      18,
+      47,
       523,
-      81,
+      63,
       21
     ],
     "w": 0,
@@ -380,7 +530,7 @@
     "i": "motion_control",
     "ty": "Button",
     "r": [
-      109,
+      117,
       511,
       81,
       44
@@ -388,13 +538,13 @@
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "动效：开"
+    "t": "动效：关"
   },
   {
     "i": "ag_pill",
     "ty": "Button",
     "r": [
-      201,
+      207,
       511,
       101,
       44

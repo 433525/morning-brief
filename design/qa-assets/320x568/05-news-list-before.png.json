@@ -26,7 +26,7 @@
     "enabled": true
   },
   {
-    "i": "ce",
+    "i": "d3",
     "ty": "HostedView",
     "r": [
       0,
@@ -116,7 +116,7 @@
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "10/2 04:30"
+    "t": "10/2 11:00"
   },
   {
     "i": "list",
@@ -411,7 +411,7 @@
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "01 · 本地测试数据  ·  just now"
+    "t": "本期首条 · 本地测试数据  ·  刚刚"
   },
   {
     "i": "ag_dock",
@@ -441,11 +441,24 @@
   },
   {
     "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      513,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
     "ty": "View",
     "r": [
-      18,
+      47,
       523,
-      81,
+      63,
       21
     ],
     "w": 0,
@@ -456,9 +469,9 @@
     "i": "editor_state",
     "ty": "Label",
     "r": [
-      18,
+      47,
       523,
-      81,
+      63,
       21
     ],
     "w": 0,
@@ -470,7 +483,7 @@
     "i": "motion_control",
     "ty": "Button",
     "r": [
-      109,
+      117,
       511,
       81,
       44
@@ -484,7 +497,7 @@
     "i": "ag_pill",
     "ty": "Button",
     "r": [
-      201,
+      207,
       511,
       101,
       44

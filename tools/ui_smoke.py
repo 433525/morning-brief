@@ -23,6 +23,8 @@ parser.add_argument('--baseline', action='store_true')
 parser.add_argument('--news', action='store_true', help='offline native list/reader fixture; no provider requests')
 parser.add_argument('--stress-ui', action='store_true', help='simulate voice controls and busy transcript for layout only')
 parser.add_argument('--motion', action='store_true', help='verify finite opening and idle animation state')
+parser.add_argument('--first-fold', action='store_true', help='primary preparation control is visible without scrolling')
+parser.add_argument('--judging-ui', action='store_true', help='simulate returned editing perspectives for layout only')
 args = parser.parse_args()
 args.bundle = args.bundle.resolve()
 bundle_bytes = sum(path.stat().st_size for path in args.bundle.rglob('*') if path.is_file())
@@ -52,6 +54,10 @@ if args.news:
 }
 ''' + code[load_end:]
     code = code.replace('fn art_kick(){','fn art_kick(){\n    return')
+    start = code.index('fn row_img(r){')
+    end = code.index('\nfn ', start+5)
+    # The host expands asset tokens in script literals, not in persisted JSON.
+    code = code[:start]+'fn row_img(r){ if r.id == "ui-demo-2" { return "{{assets}}/assets/editor-greeting.png" } "" }\n'+code[end:]
     for name in ('art_line','cover_line'):
         start = code.index(f'fn {name}(){{')
         end = code.index('\nfn ',start+5)
@@ -102,6 +108,26 @@ if args.motion:
     state = ROOT/'.local-state'/f'ui-motion-{size}'
     (state/'morning-brief').mkdir(parents=True,exist_ok=True)
     (state/'morning-brief/ui_preferences.json').write_text('{"quiet":false}',encoding='utf-8')
+if args.judging_ui:
+    state=ROOT/'.local-state'/f'ui-judging-{size}'
+    state.mkdir(parents=True,exist_ok=True)
+    fixture=ROOT/'.local-tools'/f'judging-fixture-{size}'
+    shutil.copytree(args.bundle,fixture,dirs_exist_ok=True)
+    code=(fixture/'main.splash').read_text(encoding='utf-8')
+    start=code.index('fn judge_line(){')
+    end=code.index('\nfn ',start+5)
+    code=code[:start]+'fn judge_line(){ "本地 UI 模拟 · 未调用模型" }\n'+code[end:]
+    seed='''fn fixture_judging(){
+        phase = "judging"
+        cand_n = 3
+        panel_state = "asking"
+        panel_note = "本地 UI 布局测试，未调用模型"
+        panel = [{id: "tech" label: "技术视角" state: "ok" votes: [0 1] ms: 2200 digest: "测试" model: "fixture"} {id: "biz" label: "行业视角" state: "fail" votes: [] ms: 0 digest: "测试" model: "fixture"}]
+    }
+'''
+    code=code.replace('fn boot(){',seed+'\nfn boot(){').replace('    arc_load()\n    sync_ui()','    arc_load()\n    fixture_judging()\n    sync_ui()')
+    (fixture/'main.splash').write_text(code,encoding='utf-8',newline='\n')
+    args.bundle=fixture
 env = dict(os.environ, MAKEPAD_REMOTE=str(args.port), MAKEPAD_HIDE_WINDOWS='1')
 log_path = state/'card-host.log'
 host = ROOT/'.local-tools/target/release/card-host.exe'
@@ -192,6 +218,13 @@ with log_path.open('w', encoding='utf-8') as log:
         else: time.sleep(3.3)
         if args.motion:
             pass
+        elif args.judging_ui:
+            assert has('本地 UI 模拟 · 未调用模型'), 'fixture explanation is not visible'
+            assert has('技术') and has('行业') and has('读者'), 'editing perspectives missing'
+            assert has('推荐 2 条 · 2.2 秒') and has('未收到意见') and has('等待意见'), 'editing states do not match actual fixture values'
+            assert has('初审编辑部 · 已返回 2 / 3 项结果'), 'returned results are misrepresented as successful opinions'
+            shot('13-editorial-process.png')
+            print(f'PASS {size}: simulated independent editing states and layout')
         elif args.stress_ui:
             assert inside(button('处理中')), 'busy footer control clipped'
             click('处理中')
@@ -224,14 +257,24 @@ with log_path.open('w', encoding='utf-8') as log:
             assert not any(node.get('i') == 'full_title' and inside(node) for node in nodes()), 'test did not actually scroll past the first headline'
             shot('07b-scrolled-reader.png')
             click('下一条')
-            assert has(titles[1]), 'next story did not open'
-            time.sleep(0.2)
+            for _ in range(15):
+                if has(titles[1]): break
+                time.sleep(.05)
+            else: raise AssertionError('next story did not open')
             headline = next((node for node in nodes() if node.get('i') == 'full_title'),None)
             content = next((node for node in nodes() if node.get('i') == 'story_content'),None)
             assert headline and content and headline.get('t') == titles[1] and headline['r'][1] >= content['r'][1]-1, 'next story did not reset to its headline'
             shot('08-next-story.png')
             click('返回晨报')
             assert has(titles[0]), 'reader did not return to news list'
+            seek_text(titles[2])
+            for _ in range(8):
+                thumb = next((node for node in nodes() if node.get('i') == 'rth'),None)
+                if thumb and inside(thumb): break
+                scroll_main(80)
+                time.sleep(.1)
+            else: raise AssertionError('thumbnail row did not render within the native viewport')
+            shot('14-thumbnail-row.png')
             print(f'PASS {size}: native offline list, long headline, editor, next story, back')
         elif args.baseline:
             footer = button('AI 主编', exact=False)
@@ -240,6 +283,8 @@ with log_path.open('w', encoding='utf-8') as log:
             print('baseline footer bounds passed')
         else:
             assert inside(button('打开主编')), 'main editor entry is clipped'
+            if args.first_fold:
+                assert inside(button('准备今天的晨报')), 'primary preparation control is below first viewport'
             shot('01-home.png')
             click('+')
             assert has('11'), 'count increment failed'
@@ -262,6 +307,9 @@ with log_path.open('w', encoding='utf-8') as log:
             click('准备今天的晨报')
             assert has('请确认这期取数计划'), 'plan not rendered'
             shot('03-plan.png')
+            click('修改偏好')
+            assert inside(button('准备今天的晨报')) and has('10') and button('✓ AI'), 'returning from plan lost preferences or the preparation control'
+            click('准备今天的晨报')
             click('暂不取数')
             assert has('取数已取消'), 'deny did not preserve the no-fetch path'
             shot('04-denied.png')

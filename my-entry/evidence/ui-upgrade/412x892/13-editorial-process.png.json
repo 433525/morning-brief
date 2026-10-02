@@ -1,0 +1,366 @@
+[
+  {
+    "i": "main_window",
+    "ty": "Window",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "body",
+    "ty": "KeyboardView",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "d3",
+    "ty": "HostedView",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "workspace",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      892
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "reading_surface",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      822
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "decision_surface",
+    "ty": "View",
+    "r": [
+      0,
+      0,
+      412,
+      822
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      20,
+      20,
+      372,
+      38
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "晨报卡 · 编辑部"
+  },
+  {
+    "i": "judge_pane",
+    "ty": "View",
+    "r": [
+      20,
+      76,
+      372,
+      326
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "judge_line",
+    "ty": "Label",
+    "r": [
+      38,
+      96,
+      336,
+      28
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "本地 UI 模拟 · 未调用模型"
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      38,
+      136,
+      336,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "技术、行业、读者，三个视角独立选稿；主编最后取舍。"
+  },
+  {
+    "i": "panel_head",
+    "ty": "Label",
+    "r": [
+      38,
+      193,
+      336,
+      19
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "初审编辑部 · 已返回 2 / 3 项结果"
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      38,
+      224,
+      336,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      50,
+      236,
+      52,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "技术"
+  },
+  {
+    "i": "p1",
+    "ty": "Label",
+    "r": [
+      114,
+      236,
+      248,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "推荐 2 条 · 2.2 秒"
+  },
+  {
+    "i": "2",
+    "ty": "View",
+    "r": [
+      38,
+      280,
+      336,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      50,
+      292,
+      52,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "行业"
+  },
+  {
+    "i": "p2",
+    "ty": "Label",
+    "r": [
+      114,
+      292,
+      248,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "未收到意见"
+  },
+  {
+    "i": "3",
+    "ty": "View",
+    "r": [
+      38,
+      337,
+      336,
+      45
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      50,
+      349,
+      52,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "读者"
+  },
+  {
+    "i": "p3",
+    "ty": "Label",
+    "r": [
+      114,
+      349,
+      248,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "等待意见"
+  },
+  {
+    "i": "ag_dock",
+    "ty": "View",
+    "r": [
+      0,
+      822,
+      412,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      0,
+      822,
+      412,
+      70
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      837,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
+    "ty": "View",
+    "r": [
+      47,
+      847,
+      155,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "editor_state",
+    "ty": "Label",
+    "r": [
+      47,
+      847,
+      155,
+      21
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "审稿中"
+  },
+  {
+    "i": "motion_control",
+    "ty": "Button",
+    "r": [
+      209,
+      835,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "动效：开"
+  },
+  {
+    "i": "ag_pill",
+    "ty": "Button",
+    "r": [
+      299,
+      835,
+      101,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "打开主编"
+  }
+]

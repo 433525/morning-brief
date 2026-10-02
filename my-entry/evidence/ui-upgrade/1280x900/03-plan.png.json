@@ -26,7 +26,7 @@
     "enabled": true
   },
   {
-    "i": "cd",
+    "i": "d2",
     "ty": "HostedView",
     "r": [
       0,
@@ -230,6 +230,20 @@
     "t": "暂不取数"
   },
   {
+    "i": "2",
+    "ty": "Button",
+    "r": [
+      570,
+      334,
+      81,
+      44
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "修改偏好"
+  },
+  {
     "i": "ag_dock",
     "ty": "View",
     "r": [
@@ -257,11 +271,24 @@
   },
   {
     "i": "-",
+    "ty": "Image",
+    "r": [
+      272,
+      845,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
     "ty": "View",
     "r": [
-      278,
+      307,
       855,
-      521,
+      503,
       21
     ],
     "w": 0,
@@ -272,21 +299,21 @@
     "i": "editor_state",
     "ty": "Label",
     "r": [
-      278,
+      307,
       855,
-      521,
+      503,
       21
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "AI 主编"
+    "t": "待批准"
   },
   {
     "i": "motion_control",
     "ty": "Button",
     "r": [
-      809,
+      817,
       843,
       81,
       44
@@ -300,7 +327,7 @@
     "i": "ag_pill",
     "ty": "Button",
     "r": [
-      901,
+      907,
       843,
       101,
       44

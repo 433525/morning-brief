@@ -26,7 +26,7 @@
     "enabled": true
   },
   {
-    "i": "ce",
+    "i": "d3",
     "ty": "HostedView",
     "r": [
       0,
@@ -116,7 +116,7 @@
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "10/2 04:51"
+    "t": "10/2 11:00"
   },
   {
     "i": "list",
@@ -380,7 +380,7 @@
       20,
       450,
       372,
-      201
+      212
     ],
     "w": 0,
     "window_id": "main_window",
@@ -393,7 +393,7 @@
       20,
       450,
       372,
-      201
+      212
     ],
     "w": 0,
     "window_id": "main_window",
@@ -411,7 +411,7 @@
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "01 · 本地测试数据  ·  just now"
+    "t": "本期首条 · 本地测试数据  ·  刚刚"
   },
   {
     "i": "rt",
@@ -420,7 +420,7 @@
       38,
       495,
       336,
-      86
+      97
     ],
     "w": 0,
     "window_id": "main_window",
@@ -432,7 +432,7 @@
     "ty": "Label",
     "r": [
       38,
-      588,
+      599,
       336,
       45
     ],
@@ -443,12 +443,25 @@
   },
   {
     "i": "2",
+    "ty": "View",
+    "r": [
+      20,
+      674,
+      372,
+      1
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "3",
     "ty": "GestureView",
     "r": [
       20,
-      663,
+      687,
       372,
-      159
+      135
     ],
     "w": 0,
     "window_id": "main_window",
@@ -459,9 +472,9 @@
     "ty": "View",
     "r": [
       20,
-      663,
+      687,
       372,
-      159
+      135
     ],
     "w": 0,
     "window_id": "main_window",
@@ -472,21 +485,21 @@
     "ty": "Label",
     "r": [
       38,
-      681,
+      705,
       336,
       21
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "02 · 本地测试数据  ·  15m ago"
+    "t": "02 · 本地测试数据  ·  15分钟前"
   },
   {
     "i": "rt",
     "ty": "Label",
     "r": [
       38,
-      709,
+      733,
       336,
       86
     ],
@@ -494,20 +507,6 @@
     "window_id": "main_window",
     "enabled": true,
     "t": "Open-source AI agents: a deliberately long headline covering infrastructure, evaluation, deployment, and real-world reliability for the native reading layout"
-  },
-  {
-    "i": "rsu",
-    "ty": "Label",
-    "r": [
-      38,
-      802,
-      336,
-      20
-    ],
-    "w": 0,
-    "window_id": "main_window",
-    "enabled": true,
-    "t": "这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n这是独立的 UI 测试文字，不是当天新闻，也不是模型生成结果。用它检查段落、长标题、来源和滚动。\n\n"
   },
   {
     "i": "ag_dock",
@@ -537,11 +536,24 @@
   },
   {
     "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      837,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
     "ty": "View",
     "r": [
-      18,
+      47,
       847,
-      173,
+      155,
       21
     ],
     "w": 0,
@@ -552,9 +564,9 @@
     "i": "editor_state",
     "ty": "Label",
     "r": [
-      18,
+      47,
       847,
-      173,
+      155,
       21
     ],
     "w": 0,
@@ -566,7 +578,7 @@
     "i": "motion_control",
     "ty": "Button",
     "r": [
-      201,
+      209,
       835,
       81,
       44
@@ -580,7 +592,7 @@
     "i": "ag_pill",
     "ty": "Button",
     "r": [
-      293,
+      299,
       835,
       101,
       44

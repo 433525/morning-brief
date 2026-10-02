@@ -26,7 +26,7 @@
     "enabled": true
   },
   {
-    "i": "cd",
+    "i": "d1",
     "ty": "HostedView",
     "r": [
       0,
@@ -81,10 +81,10 @@
     "i": "-",
     "ty": "View",
     "r": [
-      20,
-      20,
-      280,
-      167
+      16,
+      16,
+      288,
+      109
     ],
     "w": 0,
     "window_id": "main_window",
@@ -94,10 +94,10 @@
     "i": "-",
     "ty": "View",
     "r": [
-      42,
-      42,
-      236,
-      19
+      34,
+      32,
+      252,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
@@ -107,10 +107,10 @@
     "i": "-",
     "ty": "Label",
     "r": [
-      42,
-      42,
-      141,
-      19
+      34,
+      32,
+      165,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
@@ -121,10 +121,10 @@
     "i": "date",
     "ty": "Label",
     "r": [
-      191,
-      42,
-      87,
-      19
+      207,
+      32,
+      79,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
@@ -133,12 +133,25 @@
   },
   {
     "i": "1",
+    "ty": "View",
+    "r": [
+      34,
+      57,
+      252,
+      52
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
     "ty": "Label",
     "r": [
-      42,
-      73,
-      236,
-      55
+      34,
+      57,
+      173,
+      52
     ],
     "w": 0,
     "window_id": "main_window",
@@ -146,18 +159,140 @@
     "t": "晨报卡"
   },
   {
-    "i": "2",
+    "i": "1",
     "ty": "Label",
     "r": [
-      42,
-      141,
-      236,
-      23
+      219,
+      92,
+      67,
+      17
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "世界在更新，你的晨报已就位"
+    "t": "破晓编辑部"
+  },
+  {
+    "i": "settings_pane",
+    "ty": "View",
+    "r": [
+      16,
+      141,
+      288,
+      57
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      16,
+      147,
+      288,
+      29
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "View",
+    "r": [
+      16,
+      147,
+      288,
+      29
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "-",
+    "ty": "Label",
+    "r": [
+      16,
+      147,
+      288,
+      29
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "今天想读什么？"
+  },
+  {
+    "i": "topic_buttons",
+    "ty": "View",
+    "r": [
+      16,
+      187,
+      288,
+      11
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "chip_ai",
+    "ty": "Button",
+    "r": [
+      16,
+      190,
+      62,
+      8
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "✓ AI"
+  },
+  {
+    "i": "chip_oss",
+    "ty": "Button",
+    "r": [
+      86,
+      190,
+      79,
+      8
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "✓ 开源"
+  },
+  {
+    "i": "chip_sec",
+    "ty": "Button",
+    "r": [
+      173,
+      190,
+      59,
+      8
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "安全"
+  },
+  {
+    "i": "chip_chip",
+    "ty": "Button",
+    "r": [
+      239,
+      190,
+      59,
+      8
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true,
+    "t": "芯片"
   },
   {
     "i": "ag_dock",
@@ -460,11 +595,24 @@
   },
   {
     "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      513,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
     "ty": "View",
     "r": [
-      18,
+      47,
       523,
-      99,
+      80,
       21
     ],
     "w": 0,
@@ -475,9 +623,9 @@
     "i": "editor_state",
     "ty": "Label",
     "r": [
-      18,
+      47,
       523,
-      99,
+      80,
       21
     ],
     "w": 0,
@@ -489,7 +637,7 @@
     "i": "motion_control",
     "ty": "Button",
     "r": [
-      127,
+      135,
       511,
       81,
       44
@@ -503,7 +651,7 @@
     "i": "ag_pill",
     "ty": "Button",
     "r": [
-      218,
+      224,
       511,
       84,
       44

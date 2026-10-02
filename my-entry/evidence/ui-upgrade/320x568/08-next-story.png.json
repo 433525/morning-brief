@@ -26,7 +26,7 @@
     "enabled": true
   },
   {
-    "i": "ce",
+    "i": "d3",
     "ty": "HostedView",
     "r": [
       0,
@@ -84,7 +84,7 @@
       0,
       0,
       320,
-      93
+      66
     ],
     "w": 0,
     "window_id": "main_window",
@@ -160,27 +160,13 @@
     "t": "下一条"
   },
   {
-    "i": "story_title",
-    "ty": "Label",
-    "r": [
-      10,
-      64,
-      296,
-      21
-    ],
-    "w": 0,
-    "window_id": "main_window",
-    "enabled": true,
-    "t": "Open-source AI agents: a deliberately long headline covering infrastructure, evaluation, deployment, and real-world reliability for the native reading layout"
-  },
-  {
     "i": "story_frame",
     "ty": "View",
     "r": [
       0,
-      93,
+      66,
       320,
-      405
+      432
     ],
     "w": 0,
     "window_id": "main_window",
@@ -191,9 +177,9 @@
     "ty": "View",
     "r": [
       0,
-      93,
+      66,
       320,
-      405
+      432
     ],
     "w": 0,
     "window_id": "main_window",
@@ -204,7 +190,7 @@
     "ty": "Label",
     "r": [
       20,
-      93,
+      66,
       280,
       326
     ],
@@ -218,23 +204,23 @@
     "ty": "Label",
     "r": [
       20,
-      435,
+      408,
       280,
       19
     ],
     "w": 0,
     "window_id": "main_window",
     "enabled": true,
-    "t": "本地测试数据  ·  15m ago"
+    "t": "本地测试数据  ·  15分钟前"
   },
   {
     "i": "art_pane",
     "ty": "View",
     "r": [
       20,
-      470,
+      443,
       280,
-      28
+      55
     ],
     "w": 0,
     "window_id": "main_window",
@@ -245,9 +231,9 @@
     "ty": "View",
     "r": [
       20,
-      470,
+      443,
       280,
-      28
+      55
     ],
     "w": 0,
     "window_id": "main_window",
@@ -258,9 +244,9 @@
     "ty": "Image",
     "r": [
       20,
-      470,
+      443,
       280,
-      28
+      55
     ],
     "w": 0,
     "window_id": "main_window",
@@ -294,11 +280,24 @@
   },
   {
     "i": "-",
+    "ty": "Image",
+    "r": [
+      12,
+      513,
+      27,
+      40
+    ],
+    "w": 0,
+    "window_id": "main_window",
+    "enabled": true
+  },
+  {
+    "i": "1",
     "ty": "View",
     "r": [
-      18,
+      47,
       523,
-      81,
+      63,
       21
     ],
     "w": 0,
@@ -309,9 +308,9 @@
     "i": "editor_state",
     "ty": "Label",
     "r": [
-      18,
+      47,
       523,
-      81,
+      63,
       21
     ],
     "w": 0,
@@ -323,7 +322,7 @@
     "i": "motion_control",
     "ty": "Button",
     "r": [
-      109,
+      117,
       511,
       81,
       44
@@ -337,7 +336,7 @@
     "i": "ag_pill",
     "ty": "Button",
     "r": [
-      201,
+      207,
       511,
       101,
       44

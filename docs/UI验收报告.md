@@ -1,14 +1,14 @@
 # 晨报卡 UI 本地验收
 
-2026-10-02：实际 Splash 界面已完成首轮改造和多轮修复，保留 OctoSense、新闻来源、生图入口、15 个主编工具及取数授权流程。本地版本供审阅，尚未推送或发布。
+2026-10-02：实际 Splash 界面已完成两轮改造和复核修复，保留 OctoSense、新闻来源、生图入口、15 个主编工具及取数授权流程。本地版本供审阅，尚未推送或发布。当前续作窗口约10:02–18:02，按有依据的改进继续检查。
 
 ## 改动与证据
 
 | 检查维度 | 本轮处理 | 验证方式 |
 | --- | --- | --- |
 | 排版 | IBM Plex Sans 与 Noto Sans SC 配对；统一正文、标题和状态文字；完整新闻标题可滚动阅读 | 实际宿主截图，中文和英文长标题 fixture |
-| 留白 | 去除 Label 默认重复内边距；首页按刊头、关注设置、来源说明分组；阅读宽度限制为 760px | 320、412、768、1280px 视口 |
-| 视觉层级 | 主操作集中；计划页独立滚动；新闻状态说明进入列表滚动区；阅读工具栏固定 | 首页、计划、列表、阅读与主编截图 |
+| 留白 | 去除 Label 默认重复内边距；连续关注任务区，减少同等权重的大卡片；阅读宽度限制为 760px | 320、412、768、1280px 视口 |
+| 视觉层级 | 静态晨光刊头；按真实顺序区分首条与后续条目；计划页独立滚动；三编辑显示独立状态；阅读标题不重复 | 首页、计划、编辑过程、列表、阅读与主编截图 |
 | 色彩 | 墨蓝 `#17283b`、冷白 `#f3f6fa`、莓红 `#b72857`、琥珀；降低次要信息的视觉权重 | 原生截图；明确悬停、按下和焦点色 |
 | 动效 | 保留破晓开场；移除强白闪；可跳过和保存关闭偏好；改为有限计时 | 两帧不同的开场截图、自动结束、`animating=false` 日志 |
 | 微交互 | 主题勾选及四态反馈、条数调节、回车提交、焦点边框、真实状态短标签；非空对话隐藏快捷建议 | 原生交互脚本；模拟双语音/忙碌/非空消息布局 |
@@ -25,6 +25,9 @@
 - 底栏状态裁字、语音入口挤压；缩短状态，将语音操作留在展开面板。
 - 选中态和键盘焦点继承不一致；补齐状态色和可见焦点边框。
 - 开场隐藏后仍持续请求动画帧；采用可停止计时，空闲动画泵关闭。
+- 首轮320px准备按钮未进入首屏；紧凑刊头、短占位文案与连续任务区后，首屏断言通过。
+- 编辑汇总将失败结果也称为“意见”；改为返回结果数，角色行分别说明成功、失败和等待。
+- 首条标签挤掉小屏时间；元信息允许两行，时间统一为中文，带缩略图条目也在实际宿主检查。
 
 ## 如何查看
 
@@ -34,7 +37,7 @@
 - 截图：`powershell -ExecutionPolicy Bypass -File tools/shot.ps1 -Name ui-review.png`。
 - 停止：`powershell -ExecutionPolicy Bypass -File tools/stop.ps1`。
 
-测试命令：`python tools/ui_smoke.py`；另可指定 `--width 320 --height 568`、`--news`、`--stress-ui`、`--motion`。`--news` 和 `--stress-ui` 创建独立测试副本与状态，展示模拟数据，不调用实际模型、语音或新闻源。普通测试检查授权与拒绝路径，不批准新闻请求。
+测试命令：`python tools/ui_smoke.py`；另可指定 `--width 320 --height 568`、`--first-fold`、`--news`、`--stress-ui`、`--judging-ui`、`--motion`。`--news`、`--stress-ui` 和 `--judging-ui` 创建独立测试副本与状态，有可见模拟标记，不调用实际模型、语音或新闻源。普通测试检查授权、修改偏好与拒绝路径，不批准新闻请求。新闻副本包含中文/英文长标题和本地素材缩略图，检查实际滚动与换条归位。
 
 ## 验证边界
 
@@ -48,4 +51,8 @@ Bundle 维持未签名，遵守官方 8 MiB 限制；字体为 GB2312 常用字�
 
 - [Bolt 2025 官方获奖名单](https://bolt.new/blog/2025-bolt-hackathon-winners)：实际查看 Tailored Labs、Weight Coach、KeyHaven 的官方公开界面截图，提取主操作、信息层级和强调色的使用原则。
 - [Supabase LW13 官方获奖公告](https://supabase.com/blog/lw13-hackathon-winners)：确认视觉奖类别与 Munchwise 获奖事实；未取得其可用现场截图，未将其当作视觉对照证据。
+- [Awwwards 官方《Hot Right Now 2023》](https://assets.awwwards.com/awards/gallery/2023/07/HOT-RIGHT-NOW-BOOK-2023.pdf)：实际查看p29 Humana（页内注明Site of the Day）、p115 Neutra VDL和p117 Niccolò Miranda。后两者是书中案例，不据此推定具体奖项。
+- [Webby 2025 Bézier](https://winners.webbyawards.com/2025/websites-and-mobile-sites/features-design/best-visual-design-function/324140/bzier)与[FWA25 官方策展评价](https://thefwa.com/FWA25/RobFWA.html)：参考功能与视觉一致、有目的的交互；未成功加载的现场不作视觉结论。
 - [官方 Splash API](https://github.com/OctoSense-org/OctoScript-App-Design-Flow/blob/main/docs/SCRIPT-API.md)、本地锁定 Makepad 源码及真实 card-host，作为实现与验证依据。
+
+第二轮设计判断、参考边界和逐项修复见 [UI第二轮设计记录](UI第二轮设计记录.md)。获奖作品用于品质校准，当前结果仍需用户实际审阅，不宣称取得任何奖项或评委认可。
