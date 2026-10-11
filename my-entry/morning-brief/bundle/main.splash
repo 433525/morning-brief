@@ -61,6 +61,11 @@ let sources = [
     {id: "sspai"    plat: "sspai"    label: "少数派"       host: "sspai.com"        note: "最新文章"      kind: "rss"    url: "https://sspai.com/feed"}
     {id: "infoq"    plat: "infoq"    label: "InfoQ 中文"   host: "www.infoq.cn"     note: "最新文章"      kind: "rss"    url: "https://www.infoq.cn/feed"}
     {id: "ithome"   plat: "ithome"   label: "IT之家"       host: "www.ithome.com"   note: "最新资讯"      kind: "rss"    url: "https://www.ithome.com/rss/"}
+    // —— 视频 / 榜单平台（免密钥公开口）——
+    {id: "bili"     plat: "bili"     label: "B站热门"      host: "api.bilibili.com" note: "综合热门榜"   kind: "bili"   url: "https://api.bilibili.com/x/web-interface/popular?ps=20&pn=1"}
+    {id: "douyin"   plat: "douyin"   label: "抖音热榜"     host: "www.iesdouyin.com" note: "热搜榜"      kind: "dy"     url: "https://www.iesdouyin.com/web/api/v2/hotsearch/billboard/word/"}
+    {id: "yt1"      plat: "youtube"  label: "YouTube · Fireship" host: "www.youtube.com" note: "最新视频" kind: "rss" url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsBjURrPoezykLs9EqgamOA"}
+    {id: "yt2"      plat: "youtube"  label: "YouTube · MKBHD"    host: "www.youtube.com" note: "最新视频" kind: "rss" url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ"}
 ]
 // 平台元数据：首页按这个列表画勾选条，取数时按勾选过滤。
 let plats = [
@@ -71,6 +76,9 @@ let plats = [
     {id: "sspai"    label: "少数派"       group: "国内"}
     {id: "infoq"    label: "InfoQ 中文"   group: "国内"}
     {id: "ithome"   label: "IT之家"       group: "国内"}
+    {id: "bili"     label: "B站"          group: "国内"}
+    {id: "douyin"   label: "抖音"         group: "国内"}
+    {id: "youtube"  label: "YouTube"      group: "海外"}
 ]
 // ---- 信息品类：不再只有科技 ----
 // en/zh 两条正则命中任一即算命中；品类与平台互相独立，可以只要「生活 × 少数派」。
@@ -84,7 +92,7 @@ let topics = [
     {id: "sci"   label: "科学" en: "(\\W|^)(study|research|science|physics|biology|space|NASA|climate)(\\W|$)" zh: "科学|研究|物理|生物|太空|航天|气候"}
 ]
 let chosen = {ai: true oss: true sec: false chip: false life: false biz: false sci: false}
-let chosen_plat = {hn: true techmeme: true github: true arxiv: false sspai: true infoq: false ithome: false}
+let chosen_plat = {hn: true techmeme: true github: true arxiv: false sspai: true infoq: false ithome: false bili: false douyin: false youtube: false}
 let limit = 10
 let pool = 16
 let phase = "intent"
@@ -630,13 +638,19 @@ fn stage_rank(s){
 }
 
 
-fn fetch(url){
+fn fetch_h(url, hdrs){
+    // 有些公开接口认 UA / Referer（B站不带头会被风控），所以取数带一份默认浏览器头。
     let p = promise()
-    net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: {}}) do net.HttpEvents{
+    net.http_request(net.HttpRequest{url: url method: net.HttpMethod.GET headers: hdrs}) do net.HttpEvents{
         on_response: |res| p.resolve(res)
         on_error: |_err| p.resolve(nil)
     }
     p
+}
+
+fn fetch(url){
+    // 默认带一个常见浏览器 UA：多数公开接口对空 UA 会直接 403。
+    fetch_h(url, {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"})
 }
 
 fn hn_rows(body){
@@ -692,6 +706,54 @@ fn gh_rows(body){
     out
 }
 
+fn bili_rows(body){
+    // B站综合热门：公开 JSON，data.list[]，bvid 拼视频地址，UP 名当来源，播放量当热度。
+    let out = []
+    let data = body.parse_json()
+    if data == nil || data["data"] == nil || data["data"]["list"] == nil { return out }
+    for it in data["data"]["list"] {
+        let title = it["title"]
+        if title == nil || title == "" { continue }
+        title = "" + title
+        let bv = it["bvid"]
+        if bv == nil { continue }
+        bv = "" + bv
+        if bv == "" { continue }
+        let src = "B站"
+        let ow = it["owner"]
+        if ow != nil && ow["name"] != nil { src = "" + ow["name"] }
+        let pub = 0
+        let pd = it["pubdate"]
+        if pd != nil { pub = pd }
+        let pv = nil
+        let st = it["stat"]
+        if st != nil && st["view"] != nil { pv = st["view"] }
+        out.push({id: "bili-" + bv title: title link: "https://www.bilibili.com/video/" + bv source: src published: pub
+            summary: "" image: "" discussion: "" points: pv comments: nil})
+    }
+    out
+}
+
+fn dy_rows(body){
+    // 抖音热榜（iesdouyin 公开热搜榜）：只有词和热度，没有链接，按词生成搜索页地址。
+    let out = []
+    let data = body.parse_json()
+    if data == nil || data["word_list"] == nil { return out }
+    let i = 0
+    for it in data["word_list"] {
+        let w = it["word"]
+        if w == nil || w == "" { continue }
+        w = "" + w
+        if w == "" { continue }
+        let hv = nil
+        if it["hot_value"] != nil { hv = it["hot_value"] }
+        out.push({id: "dy-" + i title: w link: "https://www.douyin.com/search/" + w.url_encode() source: "抖音热榜" published: 0
+            summary: "" image: "" discussion: "" points: hv comments: nil})
+        i = i + 1
+    }
+    out
+}
+
 fn feed_rows(body, s){
     let items = body.parse_feed(s.kind)
     if items == nil { return nil }
@@ -737,6 +799,8 @@ fn load_source(s){
         let body = res.body.to_string()
         if s.kind == "hn" { rows = hn_rows(body) }
         else if s.kind == "gh" { rows = gh_rows(body) }
+        else if s.kind == "bili" { rows = bili_rows(body) }
+        else if s.kind == "dy" { rows = dy_rows(body) }
         else { rows = feed_rows(body, s) }
     } catch err {
         failed.push(s.label)
@@ -2611,7 +2675,7 @@ fn ag_context(){
 // =====================================================================
 let ag_tools = [
     {id: "set_topics" hint: "换品类" desc: "设置信息品类过滤，只让列出的品类通过。args: {topics: 字符串数组，元素只取 ai/oss/sec/chip/life/biz/sci；空数组表示全部放行}"}
-    {id: "set_platforms" hint: "换平台" desc: "设置只去哪几个平台取数。args: {platforms: 字符串数组，元素只取 hn/techmeme/github/arxiv/sspai/infoq/ithome；空数组表示一个都不取}"}
+    {id: "set_platforms" hint: "换平台" desc: "设置只去哪几个平台取数。args: {platforms: 字符串数组，元素只取 hn/techmeme/github/arxiv/sspai/infoq/ithome/bili/douyin/youtube；空数组表示一个都不取}"}
     {id: "set_limit" hint: "改条数" desc: "改这一期的条数上限。args: {n: 3 到 30 的整数}"}
     {id: "set_intent" hint: "写关注点" desc: "写下一句话，作为这一期的关注点（用户的一句话意图）。args: {text: 一句话}"}
     {id: "make_plan" hint: "生成计划" desc: "按当前设置写出取数计划，界面进入待批准页（不联网）。用户说「生成/来一份/看今天的」时的第一步。args: {}"}
@@ -4183,6 +4247,12 @@ fn sync_ui(){
     ui.pk_infoq_off.set_visible(!chosen_plat["infoq"])
     ui.pk_ithome_on.set_visible(chosen_plat["ithome"])
     ui.pk_ithome_off.set_visible(!chosen_plat["ithome"])
+    ui.pk_bili_on.set_visible(chosen_plat["bili"])
+    ui.pk_bili_off.set_visible(!chosen_plat["bili"])
+    ui.pk_douyin_on.set_visible(chosen_plat["douyin"])
+    ui.pk_douyin_off.set_visible(!chosen_plat["douyin"])
+    ui.pk_youtube_on.set_visible(chosen_plat["youtube"])
+    ui.pk_youtube_off.set_visible(!chosen_plat["youtube"])
     ui.limit_label.set_text("" + limit)
     ui.browse.set_visible(phase == "intent" || phase == "asking" || phase == "plan" || phase == "judging" || phase == "denied")
     ui.gen_pane.set_visible(phase == "intent")
@@ -4639,6 +4709,8 @@ HostedView{width: Fill height: Fill
                 pk_github_off := ChipOff{text: "GitHub" on_click: || toggle_plat("github")}
                 pk_arxiv_on := ChipOn{text: "arXiv" on_click: || toggle_plat("arxiv")}
                 pk_arxiv_off := ChipOff{text: "arXiv" on_click: || toggle_plat("arxiv")}
+                pk_youtube_on := ChipOn{text: "油管" on_click: || toggle_plat("youtube")}
+                pk_youtube_off := ChipOff{text: "油管" on_click: || toggle_plat("youtube")}
             }
             Label{width: Fill text: "内容平台 · 国内" draw_text.color: secondary draw_text.text_style.font_size: 12}
             View{width: Fill height: Fit flow: Right spacing: 8
@@ -4648,6 +4720,10 @@ HostedView{width: Fill height: Fill
                 pk_infoq_off := ChipOff{text: "InfoQ" on_click: || toggle_plat("infoq")}
                 pk_ithome_on := ChipOn{text: "IT之家" on_click: || toggle_plat("ithome")}
                 pk_ithome_off := ChipOff{text: "IT之家" on_click: || toggle_plat("ithome")}
+                pk_bili_on := ChipOn{text: "B站" on_click: || toggle_plat("bili")}
+                pk_bili_off := ChipOff{text: "B站" on_click: || toggle_plat("bili")}
+                pk_douyin_on := ChipOn{text: "抖音" on_click: || toggle_plat("douyin")}
+                pk_douyin_off := ChipOff{text: "抖音" on_click: || toggle_plat("douyin")}
             }
             View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 12
                 Label{text: "本期条数" draw_text.color: secondary draw_text.text_style.font_size: 12}

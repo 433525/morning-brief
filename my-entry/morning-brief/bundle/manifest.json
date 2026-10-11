@@ -12,7 +12,7 @@
   },
   "id": "morning-brief",
   "integrity": {
-    "bundle_blake3": "abfdaed286ec467165e35a0132e99ffaf878510ce12bbb60cc58d48d8969482a"
+    "bundle_blake3": "35c143433fd043c3b5d9602552886c5b1dc330ef130f68c926773121b8f28916"
   },
   "name": "Morning Brief",
   "network": {
@@ -24,7 +24,12 @@
       "export.arxiv.org",
       "sspai.com",
       "www.infoq.cn",
-      "www.ithome.com"
+      "www.ithome.com",
+      "api.bilibili.com",
+      "www.bilibili.com",
+      "www.iesdouyin.com",
+      "www.douyin.com",
+      "www.youtube.com"
     ]
   },
   "schema": 1,
