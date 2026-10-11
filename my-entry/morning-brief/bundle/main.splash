@@ -4215,8 +4215,6 @@ fn cover_line(){
 }
 
 fn sync_ui(){
-    ui.date.set_text(gen_time())
-    ui.issue_label.set_text(issue_text())
     ui.intent_line.set_text(intent_preview())
     ui.chip_ai_on.set_visible(chosen["ai"])
     ui.chip_ai_off.set_visible(!chosen["ai"])
@@ -4324,6 +4322,7 @@ fn sync_ui(){
     ui.rv_btn.set_text(rv_text())
     ui.list.render()
     ui.art_pane.render()
+    sky_kick()
     ui.ag_panel.set_visible(ag_open)
     ui.ag_note.set_text(ag_line())
     ui.ag_caps.set_text(vc_caps())
@@ -4358,17 +4357,220 @@ fn art_load(){
     }
 }
 
-fn cg_off(){
-    ui.cg_eye.set_text("")
-    ui.cg_ttl.set_text("")
-    ui.cg_rul.set_text("")
-    ui.cg.set_visible(false)
+// =====================================================================
+// 破晓 · 天空就是进度条
+// ---------------------------------------------------------------------
+// 顶部的地平线带在所有阶段都在：日出前（等你开口）太阳还在海平面以下，
+// 取数、审稿时一点点升起，出刊那一刻挂在空中。读稿时天空收成一条窄带。
+// 高度与日出程度都缓动到目标值（33ms 一帧，收敛即停表，不常驻）。
+// =====================================================================
+let sky_h = 232.0
+let sky_h_to = 232.0
+let sky_r = 0.0
+let sky_r_to = 0.0
+let sky_tid = nil
+let sky_first = true
+let sky_wk = ["周日" "周一" "周二" "周三" "周四" "周五" "周六"]
+
+fn sky_goal(){
+    let h = 232.0
+    let r = 0.0
+    if phase == "asking" { r = 0.14 }
+    if phase == "plan" { r = 0.26 }
+    if phase == "fetching" {
+        h = 156.0
+        r = 0.46
+    }
+    if phase == "judging" {
+        h = 156.0
+        r = 0.62
+        if roles.len() > 0 {
+            let k = panel.len() * 0.22
+            r = 0.62 + k / roles.len()
+        }
+    }
+    if phase == "done" {
+        h = 156.0
+        r = 1.0
+    }
+    if phase == "refused" {
+        h = 156.0
+        r = 0.05
+    }
+    if phase == "story" {
+        h = 96.0
+        r = 1.0
+    }
+    sky_h_to = h
+    sky_r_to = r
 }
 
-fn cg_text(){
-    ui.cg_eye.set_text("M O R N I N G   B R I E F")
-    ui.cg_ttl.set_text("晨 报 卡")
-    ui.cg_rul.set_text("— 中英双语 · 你的 AI 编辑部，随叫随到 —")
+fn home_title_text(){
+    if phase == "asking" { return "先回答主编一个问题" }
+    if phase == "plan" { return "确认今天的取数计划" }
+    if phase == "judging" { return "编辑部正在审稿" }
+    if phase == "denied" { return "这次先不取数" }
+    "今天想读什么？"
+}
+
+fn sky_kick(){
+    ui.home_title.set_text(home_title_text())
+    ui.setup_box.set_visible(phase == "intent")
+    sky_goal()
+    if sky_first {
+        sky_first = false
+        sky_h = sky_h_to
+        sky_r = sky_r_to
+        ui.sky.render()
+        return
+    }
+    if sky_tid == nil {
+        sky_tid = start_interval(0.033, || sky_step())
+    }
+}
+
+fn sky_step(){
+    sky_h = sky_h + (sky_h_to - sky_h) * 0.2
+    sky_r = sky_r + (sky_r_to - sky_r) * 0.07
+    if abs(sky_h_to - sky_h) < 0.5 && abs(sky_r_to - sky_r) < 0.003 {
+        sky_h = sky_h_to
+        sky_r = sky_r_to
+        if sky_tid != nil { stop_timer(sky_tid) }
+        sky_tid = nil
+    }
+    ui.sky.render()
+}
+
+fn sky_pad(n){
+    let t = "" + n
+    if n < 10 { return "0" + t }
+    t
+}
+
+fn sky_date(){
+    let d = local_time(time_now() + 28800)
+    let w = ""
+    if d.weekday >= 0 && d.weekday < 7 { w = sky_wk[d.weekday] }
+    sky_pad(d.month) + "." + sky_pad(d.day) + "  " + w
+}
+
+fn sky_issue(){
+    let n = pf_briefs
+    if phase != "done" && phase != "story" { n = n + 1 }
+    if n < 1 { n = 1 }
+    let t = "" + n
+    if n < 10 { return "No.00" + t }
+    if n < 100 { return "No.0" + t }
+    "No." + t
+}
+
+fn sky_clock(ts){
+    let d = local_time(ts + 28800)
+    sky_pad(d.hour) + ":" + sky_pad(d.minute)
+}
+
+fn sky_status(){
+    if phase == "intent" { return "日出之前 · 告诉我今天想读什么" }
+    if phase == "asking" { return "主编想先问你一句" }
+    if phase == "plan" { return "取数计划等你批准" }
+    if phase == "denied" { return "已取消 · 没有发出任何请求" }
+    if phase == "fetching" { return "正在取数 · " + src_n() + " 个信源" }
+    if phase == "judging" { return "编辑部审稿中" }
+    if phase == "refused" { return "今日休刊" }
+    if phase == "story" { return "读稿中" }
+    if phase == "done" {
+        if finished_at > 0 { return "已出刊 · " + sky_clock(finished_at) }
+        return "今日已出刊"
+    }
+    ""
+}
+
+fn sky_pct(){
+    if phase == "intent" || phase == "denied" || phase == "story" { return "" }
+    let n = floor(sky_r * 100.0)
+    let t = "" + n
+    "日出 " + t + "%"
+}
+
+fn sky_title_size(){
+    let k = (sky_h - 96.0) / 136.0
+    if k < 0.0 { k = 0.0 }
+    if k > 1.0 { k = 1.0 }
+    20.0 + k * 22.0
+}
+
+// =====================================================================
+// 片头 · 「睁眼」
+// ---------------------------------------------------------------------
+// 夜里一条细线沿着地平线画过去（就是出刊进度 00→100），画满时线被点燃，
+// 地平线下透出第一缕晨光；然后夜色从地平线处向上下同时张开——像早上睁开眼睛，
+// 露出的正是 App 顶部同一条地平线（位置对齐，硬切无缝）。全程约 3 秒，可点任意处跳过。
+// =====================================================================
+let cg_t0 = 0.0
+let cg_p = 0.0
+let cg_g = 0.0
+let cg_c = 0.0
+let cg_txt = 1.0
+let cg_a = 0.0
+let cg_ig_t = 0.0
+let cg_tid = nil
+let cg_done = false
+
+fn cg_hy(){ sky_h * 0.8 }
+
+fn cg_ease(x){
+    if x < 0.5 { return 8.0 * x * x * x * x }
+    let y = 2.0 - 2.0 * x
+    1.0 - y * y * y * y / 2.0
+}
+
+fn cg_start(){
+    cg_t0 = time_now()
+    if cg_tid == nil { cg_tid = start_interval(0.033, || cg_step()) }
+}
+
+fn cg_step(){
+    if cg_done { return }
+    let t = time_now() - cg_t0
+    cg_a = clamp(t / 0.35, 0.0, 1.0)
+    if t > 0.25 && cg_p < 1.0 {
+        cg_p = min(1.0, cg_p + 0.010 + random() * 0.026)
+        if cg_p >= 1.0 { cg_ig_t = t }
+    }
+    if cg_p >= 1.0 {
+        let u = t - cg_ig_t
+        cg_g = clamp(u / 0.45, 0.0, 1.0)
+        cg_txt = 1.0 - clamp((u - 0.30) / 0.30, 0.0, 1.0)
+        cg_c = cg_ease(clamp((u - 0.50) / 0.80, 0.0, 1.0))
+        if u > 1.34 {
+            cg_off()
+            return
+        }
+    }
+    ui.cg_layer.render()
+}
+
+fn cg_pct(){
+    let n = floor(cg_p * 100.0)
+    let t = "" + n
+    if n < 10 { return "0" + t }
+    t
+}
+
+fn cg_hint(){
+    if cg_p < 0.28 { return "接通今天的信源…" }
+    if cg_p < 0.56 { return "三位编辑就位…" }
+    if cg_p < 0.86 { return "调准今天的晨光…" }
+    if cg_p < 1.0 { return "开印…" }
+    "早上好"
+}
+
+fn cg_off(){
+    if cg_done { return }
+    cg_done = true
+    if cg_tid != nil { stop_timer(cg_tid) }
+    cg_tid = nil
+    ui.cg.set_visible(false)
 }
 
 fn boot(){
@@ -4382,96 +4584,124 @@ fn boot(){
     iv_load()
     sync_ui()
     // 不再自动探 llm.speech：应用没申请 llm，这一探在任何宿主上都会被拒；而被拒时上游直接重入 isolate（ISSUE-03），会把调用栈弄脏。
-    start_timeout(1.10, || cg_text())
-    start_timeout(3.12, || cg_off())
+    ui.cg_layer.render()
+    ui.cg_veil.set_visible(false)
+    cg_start()
 }
 start_timeout(0.05, || boot())
 
-// ---- 视觉体系：晨报纸质（暖白纸面 + 墨色正文 + 晨金点缀 + 品牌洋红） ----
-let ink = #x1a1c22
-let secondary = #x8b8d96
-let accent = #xd61f52
-let ground = #xf5f2ec
-let paper = #xffffff
-let hair = #xe8e4dc
-let gold = #xc08a34
-let night = #x141a27
+// ---- 视觉体系「破晓 Daybreak」：夜靛底 + 月光字 + 晨曦玫瑰 + 日冕金 ----
+// 一个颜色只做一件事：金 = 太阳 / 被选中 / 数字；玫瑰 = 编辑意见与强调；月光白 = 正文标题。
+let ink = #xeceefe
+let soft = #xc9cdf0
+let secondary = #x9ba0c9
+let faint = #x6c72a6
+let accent = #xff7a8a
+let ground = #x0e1230
+let paper = #x151a43
+let surface2 = #x1c2252
+let hair = #x262d68
+let gold = #xffc65c
+let night = #x090c22
+let lav = #xb9a6ff
 
-// ---- 主题开关 · 选中=实心墨色胶囊（暖金字），未选=描边胶囊；两态各一个控件，靠可见性切换 ----
-let ChipOn = ButtonFlat{height: 34 padding: Inset{left: 16 right: 16}
-    draw_bg +: {border_radius: 17.0 color: night color_hover: #x222b3c color_down: #x0b0f18 border_size: 1.0
-        border_color: night border_color_hover: #x222b3c border_color_down: #x0b0f18}
-    draw_text +: {color: #xffe2b8 color_hover: #xffe2b8 color_down: #xffe2b8 text_style +: {font_size: 13}}
+// ---- 主题开关 · 选中=日冕金实心（深字），未选=发丝描边；两态各一个控件，靠可见性切换 ----
+let ChipOn = ButtonFlat{height: 34 padding: Inset{left: 15 right: 15}
+    draw_bg +: {border_radius: 17.0 color: gold color_hover: #xffd27c color_down: #xf0b443 border_size: 1.0
+        border_color: gold border_color_hover: #xffd27c border_color_down: #xf0b443}
+    draw_text +: {color: #x161a3a color_hover: #x161a3a color_down: #x161a3a text_style +: {font_size: 13}}
 }
-let ChipOff = ButtonFlat{height: 34 padding: Inset{left: 16 right: 16}
-    draw_bg +: {border_radius: 17.0 color: #xffffff00 color_hover: #x00000008 color_down: #x00000014 border_size: 1.0
-        border_color: hair border_color_hover: #xd6d1c5 border_color_down: #xd6d1c5}
+let ChipOff = ButtonFlat{height: 34 padding: Inset{left: 15 right: 15}
+    draw_bg +: {border_radius: 17.0 color: #x151a4300 color_hover: #x1c2252 color_down: #x232a62 border_size: 1.0
+        border_color: #x2b3373 border_color_hover: #x4a5296 border_color_down: #x5a62a8}
     draw_text +: {color: secondary color_hover: ink color_down: ink text_style +: {font_size: 13}}
 }
 // 深色面板里的小胶囊（主编对话条上那一排动作）
-let ChipDk = ButtonFlat{height: 32 padding: Inset{left: 14 right: 14}
-    draw_bg +: {border_radius: 16.0 color: #xffffff12 color_hover: #xffffff22 color_down: #xffffff33 border_size: 1.0
-        border_color: #xffffff2b border_color_hover: #xffffff4d border_color_down: #xffffff4d}
-    draw_text +: {color: #xdbe4f7 color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 12}}
+let ChipDk = ButtonFlat{height: 32 padding: Inset{left: 13 right: 13}
+    draw_bg +: {border_radius: 16.0 color: #xffffff0d color_hover: #xffffff1c color_down: #xffffff2a border_size: 1.0
+        border_color: #xffffff22 border_color_hover: #xffc65c80 border_color_down: #xffc65c}
+    draw_text +: {color: soft color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 12}}
 }
-let NumBtn = ButtonFlat{height: 36 padding: Inset{left: 14 right: 14}
-    draw_bg +: {border_radius: 18.0 color: paper color_hover: #xf1ede5 color_down: #xe7e2d8 border_size: 1.0
-        border_color: hair border_color_hover: hair border_color_down: hair}
-    draw_text +: {color: ink color_hover: ink color_down: ink text_style +: {font_size: 17}}
+let NumBtn = ButtonFlat{width: 38 height: 38 padding: Inset{left: 0 right: 0} align: Align{x: 0.5 y: 0.5}
+    draw_bg +: {border_radius: 19.0 color: surface2 color_hover: #x262d68 color_down: #x2f3778 border_size: 1.0
+        border_color: #x2b3373 border_color_hover: #x4a5296 border_color_down: gold}
+    draw_text +: {color: ink color_hover: #xffffff color_down: gold text_style +: {font_size: 17}}
 }
-let PrimaryBtn = ButtonFlat{height: 46 padding: Inset{left: 20 right: 20}
-    draw_bg +: {border_radius: 14.0 color: accent color_hover: #xbd1a48 color_down: #xa2163e border_size: 0.0}
-    draw_text +: {color: #xffffff color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 15}}
+// 主行动按钮：一道从晨曦玫瑰到日冕金的光，深色字。全 App 只有它是渐变的。
+let PrimaryBtn = ButtonFlat{height: 46 padding: Inset{left: 22 right: 22}
+    draw_bg +: {pixel: fn(){
+        let sz = self.rect_size
+        let sdf = Sdf2d.viewport(self.pos * sz)
+        sdf.box(1.0, 1.0, sz.x - 2.0, sz.y - 2.0, sz.y * 0.5 - 1.0)
+        var c = #xff7a8a.mix(#xffc65c, self.pos.x)
+        c = c.mix(#xfff4dc, self.hover * 0.22)
+        c = c.mix(#xd9566a, self.down * 0.25)
+        sdf.fill(c)
+        return sdf.result
+    }}
+    draw_text +: {color: #x1a1033 color_hover: #x1a1033 color_down: #x1a1033 text_style: theme.font_bold{font_size: 15}}
+}
+let HeroBtn = PrimaryBtn{width: Fill height: 56
+    draw_text +: {text_style: theme.font_bold{font_size: 16}}
 }
 let GhostBtn = ButtonFlat{height: 44 padding: Inset{left: 18 right: 18}
-    draw_bg +: {border_radius: 12.0 color: #xffffff00 color_hover: #x0000000a color_down: #x00000014 border_size: 1.0
-        border_color: hair border_color_hover: #xd6d1c5 border_color_down: #xd6d1c5}
-    draw_text +: {color: #x45464e color_hover: ink color_down: ink text_style +: {font_size: 14}}
+    draw_bg +: {border_radius: 22.0 color: #x151a4300 color_hover: #x1c2252 color_down: #x232a62 border_size: 1.0
+        border_color: #x2b3373 border_color_hover: #x4a5296 border_color_down: #x5a62a8}
+    draw_text +: {color: soft color_hover: ink color_down: ink text_style +: {font_size: 14}}
 }
-let BarBtn = ButtonFlat{height: 30 padding: Inset{left: 4 right: 8}
-    draw_bg +: {color: #xffffff00 color_hover: #x0000000a color_down: #x00000014 border_size: 0.0}
-    draw_text +: {color: accent color_hover: accent color_down: accent text_style +: {font_size: 13}}
+let BarBtn = ButtonFlat{height: 30 padding: Inset{left: 6 right: 8}
+    draw_bg +: {border_radius: 15.0 color: #xffffff00 color_hover: #xff7a8a1a color_down: #xff7a8a33 border_size: 0.0}
+    draw_text +: {color: accent color_hover: #xffa0ab color_down: accent text_style +: {font_size: 13}}
 }
-let RowText = View{width: Fill height: Fit flow: Down spacing: 4}
+let RowText = View{width: Fill height: Fit flow: Down spacing: 5}
 let RowCol = RowText{
-    rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: gold draw_text.text_style: theme.font_bold{font_size: 10}}
+    rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 9}}
     rt := Label{width: Fill text: "" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 15}}
-    rsu := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: #x6e7280 draw_text.text_style.font_size: 11}
-    rw := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: accent draw_text.text_style.font_size: 11}
-    rp := Label{visible: false width: Fill text: "" max_lines: 1 draw_text.color: #x6a4bb8 draw_text.text_style.font_size: 10}
+    rsu := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: secondary draw_text.text_style.font_size: 12}
+    rw := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: accent draw_text.text_style.font_size: 12}
+    rp := Label{visible: false width: Fill text: "" max_lines: 1 draw_text.color: lav draw_text.text_style.font_size: 10}
 }
-let RowCard = RoundedView{width: Fill height: Fit flow: Down spacing: 4
-    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-    rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: gold draw_text.text_style: theme.font_bold{font_size: 10}}
+let RowCard = RoundedView{width: Fill height: Fit flow: Down spacing: 5
+    padding: Inset{top: 15 bottom: 15 left: 16 right: 16}
+    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 16.0
+    draw_bg.border_size: 1.0 draw_bg.border_color: hair
+    rm := Label{width: Fill text: "" max_lines: 1 draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 9}}
     rt := Label{width: Fill text: "" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 15}}
-    rsu := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: #x6e7280 draw_text.text_style.font_size: 11}
-    rw := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: accent draw_text.text_style.font_size: 11}
-    rp := Label{visible: false width: Fill text: "" max_lines: 1 draw_text.color: #x6a4bb8 draw_text.text_style.font_size: 10}
+    rsu := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: secondary draw_text.text_style.font_size: 12}
+    rw := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: accent draw_text.text_style.font_size: 12}
+    rp := Label{visible: false width: Fill text: "" max_lines: 1 draw_text.color: lav draw_text.text_style.font_size: 10}
 }
-let RowCardImg = RoundedView{width: Fill height: Fit flow: Right spacing: 12 align: Align{y: 0.0}
-    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
+let RowCardImg = RoundedView{width: Fill height: Fit flow: Right spacing: 14 align: Align{y: 0.0}
+    padding: Inset{top: 15 bottom: 15 left: 16 right: 16}
+    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 16.0
+    draw_bg.border_size: 1.0 draw_bg.border_color: hair
     col := RowCol{}
-    rth := Image{width: 68 height: 68 fit: ImageFit.CropToFill draw_bg.color: #xf2eee6 draw_bg.border_radius: 10.0}
+    rth := Image{width: 72 height: 72 fit: ImageFit.CropToFill draw_bg.color: surface2 draw_bg.border_radius: 12.0}
 }
 let DarkBtn = ButtonFlat{height: 34 padding: Inset{left: 16 right: 16}
-    draw_bg +: {border_radius: 17.0 color: #xffffff1a color_hover: #xffffff2e color_down: #xffffff42 border_size: 1.0
-        border_color: #xffffff5c border_color_hover: #xffffff8c border_color_down: #xffffff8c}
-    draw_text +: {color: #xffffff color_hover: #xffffff color_down: #xffffff text_style +: {font_size: 12}}
+    draw_bg +: {border_radius: 17.0 color: #x090c2299 color_hover: #x090c22cc color_down: #x090c22ee border_size: 1.0
+        border_color: #xffffff4d border_color_hover: #xffc65c border_color_down: #xffc65c}
+    draw_text +: {color: #xffffff color_hover: #xfff1cf color_down: #xffffff text_style +: {font_size: 12}}
 }
-let PillBtn = ButtonFlat{height: 40 padding: Inset{left: 18 right: 18}
-    draw_bg +: {border_radius: 20.0 color: night color_hover: #x222b3c color_down: #x0b0f18 border_size: 1.0
-        border_color: gold border_color_hover: #xd8a24a border_color_down: gold}
-    draw_text +: {color: #xffe2b8 color_hover: #xfff0d6 color_down: #xffe2b8 text_style +: {font_size: 13}}
+let PillBtn = ButtonFlat{height: 42 padding: Inset{left: 18 right: 18}
+    draw_bg +: {border_radius: 21.0 color: #x10143a color_hover: #x161b48 color_down: #x0b0e2a border_size: 1.0
+        border_color: #xffc65c99 border_color_hover: gold border_color_down: gold}
+    draw_text +: {color: #xfff1cf color_hover: #xffffff color_down: gold text_style +: {font_size: 13}}
 }
 // 正在收音时变成实心洋红，一眼看出「它在听」
 let MicBtn = ButtonFlat{height: 34 padding: Inset{left: 14 right: 14}
-    draw_bg +: {border_radius: 17.0 color: #x18213a color_hover: #x1d2a45 color_down: #x121a2e border_size: 1.0
-        border_color: #x2b3a5e border_color_hover: #x3d4f78 border_color_down: #x2b3a5e}
-    draw_text +: {color: #xe8eefc color_hover: #xffffff color_down: #xe8eefc text_style +: {font_size: 12}}
+    draw_bg +: {border_radius: 17.0 color: #x1c2252 color_hover: #x262d68 color_down: #x151a43 border_size: 1.0
+        border_color: #x2f3778 border_color_hover: #x4a5296 border_color_down: #x2f3778}
+    draw_text +: {color: ink color_hover: #xffffff color_down: ink text_style +: {font_size: 12}}
 }
-
+// 小号段落标题：不做全大写英文眉标，只用暗一档的中文小字
+let SecLabel = Label{width: Fill text: "" draw_text.color: faint draw_text.text_style.font_size: 12}
+// 面板：不透明表面 + 发丝描边
+let Panel = RoundedView{width: Fill height: Fit flow: Down spacing: 10
+    padding: Inset{top: 16 bottom: 16 left: 16 right: 16}
+    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 20.0
+    draw_bg.border_size: 1.0 draw_bg.border_color: hair
+}
 // =====================================================================
 // 决策台 · Jev / System One 式的「校准选择」
 // ---------------------------------------------------------------------
@@ -4655,479 +4885,574 @@ fn vc_pick_voice(vs){
 }
 
 HostedView{width: Fill height: Fill
-    full: View{width: Fill height: Fill flow: Overlay show_bg: true draw_bg.color: ground
-        browse := ScrollYView{width: Fill height: Fill flow: Down spacing: 14 padding: Inset{left: 16 right: 16 top: 16 bottom: 300}
-            // ---- 报头 · 每天一份报纸的仪式感 ----
-            RoundedView{width: Fill height: Fit flow: Down spacing: 7
-                new_batch: true draw_bg.color: night draw_bg.border_radius: 18.0
-                padding: Inset{top: 16 bottom: 18 left: 17 right: 17}
-                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                    date := Label{width: Fill text: "" draw_text.color: #x92a3c6 draw_text.text_style.font_size: 11}
-                    issue_label := Label{text: "" draw_text.color: #x6d7d9c draw_text.text_style.font_size: 10}
-                }
-                Label{width: Fill text: "晨报卡" draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 30}}
-                RoundedView{width: 46 height: 2 new_batch: true draw_bg.color: gold draw_bg.border_radius: 1.0}
-                Label{width: Fill text: "MORNING BRIEF · 晨报卡 · AI 编辑部 · 常驻主编在线" draw_text.color: #xe8759b draw_text.text_style.font_size: 10}
-            }
-            intent_line := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
-            ask_in := TextInput{width: Fill height: 46 empty_text: "也可以直接写，例如：我想看芯片和 AI 的大新闻"
-                on_change: |text| set_ask(text)
-                draw_bg +: {color: paper color_hover: paper color_focus: paper color_empty: paper
-                    border_color: hair border_color_hover: #xd6d1c5 border_color_focus: accent border_color_empty: hair
-                    border_radius: 12.0}
-                draw_text +: {color: ink color_hover: ink color_focus: ink color_empty: secondary color_empty_hover: secondary}
-            }
-            // ---- 信息品类：选中是实心墨色，未选是描边（两态各一个控件，靠可见性切换） ----
-            Label{width: Fill text: "信息品类" draw_text.color: secondary draw_text.text_style.font_size: 12}
-            View{width: Fill height: Fit flow: Right spacing: 8
-                chip_ai_on := ChipOn{text: "AI" on_click: || toggle_topic("ai")}
-                chip_ai_off := ChipOff{text: "AI" on_click: || toggle_topic("ai")}
-                chip_oss_on := ChipOn{text: "开源" on_click: || toggle_topic("oss")}
-                chip_oss_off := ChipOff{text: "开源" on_click: || toggle_topic("oss")}
-                chip_sec_on := ChipOn{text: "安全" on_click: || toggle_topic("sec")}
-                chip_sec_off := ChipOff{text: "安全" on_click: || toggle_topic("sec")}
-                chip_chip_on := ChipOn{text: "芯片" on_click: || toggle_topic("chip")}
-                chip_chip_off := ChipOff{text: "芯片" on_click: || toggle_topic("chip")}
-            }
-            View{width: Fill height: Fit flow: Right spacing: 8
-                chip_life_on := ChipOn{text: "生活" on_click: || toggle_topic("life")}
-                chip_life_off := ChipOff{text: "生活" on_click: || toggle_topic("life")}
-                chip_biz_on := ChipOn{text: "财经" on_click: || toggle_topic("biz")}
-                chip_biz_off := ChipOff{text: "财经" on_click: || toggle_topic("biz")}
-                chip_sci_on := ChipOn{text: "科学" on_click: || toggle_topic("sci")}
-                chip_sci_off := ChipOff{text: "科学" on_click: || toggle_topic("sci")}
-            }
-            // ---- 内容平台：想看哪几家就勾哪几家，没勾的平台一条都不会去取 ----
-            Label{width: Fill text: "内容平台 · 海外" draw_text.color: secondary draw_text.text_style.font_size: 12}
-            View{width: Fill height: Fit flow: Right spacing: 8
-                pk_hn_on := ChipOn{text: "HN" on_click: || toggle_plat("hn")}
-                pk_hn_off := ChipOff{text: "HN" on_click: || toggle_plat("hn")}
-                pk_techmeme_on := ChipOn{text: "TechMeme" on_click: || toggle_plat("techmeme")}
-                pk_techmeme_off := ChipOff{text: "TechMeme" on_click: || toggle_plat("techmeme")}
-                pk_github_on := ChipOn{text: "GitHub" on_click: || toggle_plat("github")}
-                pk_github_off := ChipOff{text: "GitHub" on_click: || toggle_plat("github")}
-                pk_arxiv_on := ChipOn{text: "arXiv" on_click: || toggle_plat("arxiv")}
-                pk_arxiv_off := ChipOff{text: "arXiv" on_click: || toggle_plat("arxiv")}
-                pk_youtube_on := ChipOn{text: "油管" on_click: || toggle_plat("youtube")}
-                pk_youtube_off := ChipOff{text: "油管" on_click: || toggle_plat("youtube")}
-            }
-            Label{width: Fill text: "内容平台 · 国内" draw_text.color: secondary draw_text.text_style.font_size: 12}
-            View{width: Fill height: Fit flow: Right spacing: 8
-                pk_sspai_on := ChipOn{text: "少数派" on_click: || toggle_plat("sspai")}
-                pk_sspai_off := ChipOff{text: "少数派" on_click: || toggle_plat("sspai")}
-                pk_infoq_on := ChipOn{text: "InfoQ" on_click: || toggle_plat("infoq")}
-                pk_infoq_off := ChipOff{text: "InfoQ" on_click: || toggle_plat("infoq")}
-                pk_ithome_on := ChipOn{text: "IT之家" on_click: || toggle_plat("ithome")}
-                pk_ithome_off := ChipOff{text: "IT之家" on_click: || toggle_plat("ithome")}
-                pk_bili_on := ChipOn{text: "B站" on_click: || toggle_plat("bili")}
-                pk_bili_off := ChipOff{text: "B站" on_click: || toggle_plat("bili")}
-                pk_douyin_on := ChipOn{text: "抖音" on_click: || toggle_plat("douyin")}
-                pk_douyin_off := ChipOff{text: "抖音" on_click: || toggle_plat("douyin")}
-            }
-            View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 12
-                Label{text: "本期条数" draw_text.color: secondary draw_text.text_style.font_size: 12}
-                NumBtn{text: "-" on_click: || bump(-1)}
-                limit_label := Label{text: "10" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 17}}
-                NumBtn{text: "+" on_click: || bump(1)}
-            }
-            gen_pane := View{visible: true width: Fill height: Fit flow: Down spacing: 8 align: Align{x: 0.0}
-                PrimaryBtn{text: "生成晨报" on_click: || aq_start()}
-                Label{width: Fill text: "点一下先出取数计划，你点「批准」之后才会联网。" draw_text.color: secondary draw_text.text_style.font_size: 11}
-            }
-            // ---- 出报前的一问：主编先开口，读者答 A / B，也可以让他别问了 ----
-            aq_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 10
-                new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-                padding: Inset{top: 14 bottom: 14 left: 16 right: 16}
-                Label{width: Fill text: "出报前，主编想问一句" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 13}}
-                aq_q := Label{width: Fill text: "" max_lines: 2 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 15}}
-                View{width: Fill height: Fit flow: Down spacing: 8
-                    aq_btn_a := GhostBtn{text: "A" on_click: || aq_choose("a")}
-                    aq_btn_b := GhostBtn{text: "B" on_click: || aq_choose("b")}
-                }
-                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                    aq_note := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
-                    BarBtn{text: "你定，不用问" on_click: || aq_choose("skip")}
-                }
-            }
-            plan_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 10
-                new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-                padding: Inset{top: 14 bottom: 14 left: 16 right: 16}
-                Label{width: Fill text: "待批准的取数计划" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 13}}
-                View{width: Fill height: Fit flow: Right spacing: 8 align: Align{y: 0.5}
-                    PrimaryBtn{text: "批准并取数" on_click: || approve()}
-                    GhostBtn{text: "暂不" on_click: || deny()}
-                }
-                plan_ask := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
-                plan_ai := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 12}}
-                plan_topics := Label{width: Fill text: "" draw_text.color: #x45464e draw_text.text_style.font_size: 13}
-                plan_limit := Label{width: Fill text: "" draw_text.color: #x45464e draw_text.text_style.font_size: 13}
-                plan_hosts := Label{width: Fill text: "" draw_text.color: #x45464e draw_text.text_style.font_size: 13}
-            }
-            judge_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 6
-                new_batch: true show_bg: true draw_bg.color: #xfdf6e4 draw_bg.border_radius: 14.0
-                padding: Inset{top: 14 bottom: 14 left: 16 right: 16}
-                judge_line := Label{width: Fill text: "" draw_text.color: #x9a6b12 draw_text.text_style: theme.font_bold{font_size: 13}}
-                Label{width: Fill text: "三位编辑背靠背独立阅读，互相看不到对方的选择；随后由主编终审取舍。" draw_text.color: #x45464e draw_text.text_style.font_size: 12}
-                View{width: Fill height: Fit flow: Down spacing: 4 padding: Inset{top: 4 bottom: 2}
-                    panel_head := Label{width: Fill text: "" draw_text.color: #x9a6b12 draw_text.text_style: theme.font_bold{font_size: 10}}
-                    p1 := Label{width: Fill text: "" draw_text.color: #x45464e draw_text.text_style.font_size: 11}
-                    p2 := Label{width: Fill text: "" draw_text.color: #x45464e draw_text.text_style.font_size: 11}
-                    p3 := Label{width: Fill text: "" draw_text.color: #x45464e draw_text.text_style.font_size: 11}
-                }
-            }
-            deny_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 8
-                new_batch: true show_bg: true draw_bg.color: #xfdf6e4 draw_bg.border_radius: 14.0
-                padding: Inset{top: 14 bottom: 14 left: 16 right: 16}
-                Label{width: Fill text: "已取消 — 未发起任何网络请求。" draw_text.color: #x9a6b12 draw_text.text_style: theme.font_bold{font_size: 13}}
-                Label{width: Fill text: "你的授权是取数的前提；拒绝后不会读取任何来源。" draw_text.color: #x45464e draw_text.text_style.font_size: 12}
-                View{width: Fill height: Fit flow: Right align: Align{y: 0.5}
-                    GhostBtn{text: "重新开始" on_click: || restart()}
-                }
-            }
-            hint_line := Label{width: Fill text: "这份报会记住你读过什么，越读越懂你；右下角的主编能说话，也能查本报档案。" draw_text.color: #xa8a49c draw_text.text_style.font_size: 10}
-        }
-        // ---- 主编拒刊页：信源太薄时不出报。这不是失败，是拒绝。 ----
-        refuse_pane := View{visible: false width: Fill height: Fill flow: Down
-            new_batch: true show_bg: true draw_bg.color: ground
-            View{width: Fill height: Fit flow: Down spacing: 10 padding: Inset{left: 16 right: 16 top: 18 bottom: 16}
-                View{width: Fill height: Fit flow: Down spacing: 6
-                    new_batch: true draw_bg.color: night draw_bg.border_radius: 18.0
-                    padding: Inset{top: 15 bottom: 17 left: 17 right: 17}
-                    Label{width: Fill text: "今日休刊" draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 28}}
-                    RoundedView{width: 46 height: 2 new_batch: true draw_bg.color: gold draw_bg.border_radius: 1.0}
-                    Label{width: Fill text: "REFUSED TO PUBLISH · 主编拒刊" draw_text.color: #xe8759b draw_text.text_style.font_size: 10}
-                }
-                Label{width: Fill text: "今天这些消息我没有把握，不想拿一个二手转述来充今天的晨报。" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
-                View{width: Fill height: Fit flow: Down spacing: 5
-                    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                    Label{width: Fill text: "为什么不出" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                    refuse_why_l := Label{width: Fill text: "" max_lines: 8 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                    refuse_tier := Label{width: Fill text: "" max_lines: 3 draw_text.color: #x6e7280 draw_text.text_style.font_size: 11}
-                }
-                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                    PrimaryBtn{text: "仍要出报" on_click: || refuse_go()}
-                    GhostBtn{text: "重新开始" on_click: || restart()}
-                }
-                Label{width: Fill text: "拒刊是主编的判断，不是对你的束缚 —— 决定权在你手里，你说了出，我就出。" max_lines: 3 draw_text.color: #xa8a49c draw_text.text_style.font_size: 10}
-            }
-        }
-        run_pane := View{visible: false width: Fill height: Fill flow: Down
-            new_batch: true show_bg: true draw_bg.color: ground
-            View{width: Fill height: Fit flow: Down spacing: 4 padding: Inset{left: 14 right: 14 top: 10 bottom: 6}
-                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                    status_line := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 16}}
-                    st_gen := Label{text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
-                }
-                fail_line := Label{visible: false width: Fill text: "" draw_text.color: #xc0392b draw_text.text_style.font_size: 11}
-                ai_sum := Label{visible: false width: Fill text: "" draw_text.color: #x6a4bb8 draw_text.text_style: theme.font_bold{font_size: 11}}
-                ai_intro := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 13}}
-                ai_note := Label{visible: false width: Fill text: "" draw_text.color: #x6b6b70 draw_text.text_style.font_size: 10}
-                View{width: Fill height: Fit flow: Down spacing: 3
-                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0
-                    padding: Inset{top: 8 bottom: 8 left: 10 right: 10}
-                    pipe_line := Label{width: Fill text: "" draw_text.color: #x3a3a3c draw_text.text_style.font_size: 10}
-                    st_src := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
-                }
-                stale_line := Label{visible: false width: Fill text: "" draw_text.color: #x8a6a24 draw_text.text_style.font_size: 11}
-                // 编辑部到底看了多少、扔了多少，以及今天这池子是什么成色
-                View{width: Fill height: Fit flow: Down spacing: 3
-                    new_batch: true show_bg: true draw_bg.color: #xfaf7f1 draw_bg.border_radius: 10.0
-                    padding: Inset{top: 8 bottom: 8 left: 10 right: 10}
-                    work_line := Label{visible: false width: Fill text: "" draw_text.color: gold draw_text.text_style: theme.font_bold{font_size: 11}}
-                    tier_line := Label{visible: false width: Fill text: "" draw_text.color: #x6e7280 draw_text.text_style.font_size: 10}
-                }
-            }
-            list := ScrollYView{width: Fill height: Fill flow: Down spacing: 8 padding: Inset{left: 14 right: 14 bottom: 12}
+    full: View{width: Fill height: Fill flow: Overlay
+        SolidView{width: Fill height: Fill draw_bg.color: ground}
+        View{width: Fill height: Fill flow: Down
+            // ---- 地平线带 · 所有阶段共用；太阳的高度 = 今天这份报做到哪了 ----
+            sky := View{width: Fill height: Fit flow: Down
                 on_render: || {
-                    if cover_on {
-                        View{width: Fill height: 196 flow: Overlay
-                            new_batch: true
-                            Image{width: Fill height: Fill fit: ImageFit.CropToFill draw_bg.color: #x0b1020 draw_bg.border_radius: 14.0 src: http_resource(cover_url)}
-                            SolidView{width: Fill height: Fill draw_bg.color: #x07101ecc draw_bg.border_radius: 14.0}
-                            View{width: Fill height: Fill flow: Down spacing: 6 padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                                View{width: Fill height: Fit flow: Right spacing: 6 align: Align{y: 0.5}
-                                    Label{width: Fill text: "晨报卡 · AI EDITION" draw_text.color: #xffe2b8 draw_text.text_style: theme.font_bold{font_size: 10}}
-                                    Label{text: cover_line() draw_text.color: #xa9badb draw_text.text_style.font_size: 9}
+                    View{width: Fill height: sky_h flow: Overlay
+                        View{width: Fill height: Fill show_bg: true new_batch: true
+                            draw_bg +: {
+                                sr: instance(0.0)
+                                pixel: fn(){
+                                    let sz = self.rect_size
+                                    let p = self.pos * sz
+                                    let t = self.draw_pass.time
+                                    let r = self.sr
+                                    let hy = sz.y * 0.8
+                                    let v = clamp(p.y / hy, 0.0, 1.0)
+                                    let top = #x080b24.mix(#x1d2a6a, r)
+                                    let hor = #x2b2462.mix(#xff9a7e, r * 0.8)
+                                    var col = top.mix(hor, pow(v, 2.4))
+                                    let above = 1.0 - smoothstep(hy - 0.6, hy + 0.6, p.y)
+                                    // 星尘：哈希网格里的点，随时间各自闪烁，日出后淡去
+                                    let cell = floor(p / 26.0)
+                                    let h1 = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453)
+                                    let h2 = fract(sin(dot(cell, vec2(269.5, 183.3))) * 43758.5453)
+                                    let sp = (cell + vec2(0.2 + 0.6 * h1, 0.2 + 0.6 * h2)) * 26.0
+                                    let sd = length(p - sp)
+                                    let tw = 0.55 + 0.45 * sin(t * (1.2 + h1 * 2.6) + h2 * 6.28)
+                                    let star = (1.0 - smoothstep(0.2, 1.4, sd)) * step(0.70, h1) * tw * (1.0 - r * 0.85) * above * (1.0 - v * 0.6)
+                                    col = col.mix(#xe6e9ff, star)
+                                    // 太阳：从海平面下升起；半径随带高缩放
+                                    let rad = min(sz.y * 0.18, 28.0)
+                                    let sx = min(sz.x * 0.56, sz.x - 160.0)
+                                    let sy = hy + rad * 1.2 - r * (rad * 1.2 + hy * 0.40)
+                                    let d = length(p - vec2(sx, sy))
+                                    let disc = 1.0 - smoothstep(rad - 1.0, rad + 0.6, d)
+                                    let halo = exp(-max(d - rad, 0.0) / (22.0 + 26.0 * r)) * (0.45 + 0.5 * r)
+                                    let sunc = #xffc65c.mix(#xfff3d8, 1.0 - smoothstep(0.0, rad, d))
+                                    col = col.mix(#xff9a7a.mix(#xffc65c, 0.45), clamp(halo * above * 0.75, 0.0, 1.0))
+                                    col = col.mix(sunc, disc * above)
+                                    // 地平线处的晨光（日出前最亮的那一抹）
+                                    let hg = exp(-abs(p.y - hy) / 22.0) * exp(-abs(p.x - sx) / 150.0) * (0.85 - 0.45 * r)
+                                    col = col.mix(#xff8a7a, clamp(hg, 0.0, 1.0))
+                                    // 海面：地平线以下渐暗，最后无缝融进底色
+                                    let below = 1.0 - above
+                                    let dep = clamp((p.y - hy) / (sz.y - hy), 0.0, 1.0)
+                                    col = col.mix(#x141943.mix(#x0e1230, dep), below)
+                                    // 太阳的倒影：一列在水面上抖动的金色碎光
+                                    let rx = abs(p.x - sx)
+                                    let wid = rad * (0.5 + dep * 1.6)
+                                    let wave = 0.5 + 0.5 * sin(p.y * 1.3 - t * 2.2 + sin(p.x * 0.06 + t * 0.8) * 2.0)
+                                    let refl = (1.0 - smoothstep(wid * 0.25, wid, rx)) * wave * (1.0 - dep) * (0.18 + 0.62 * r) * below
+                                    col = col.mix(#xffc65c, clamp(refl * 0.6, 0.0, 1.0))
+                                    // 地平线：一根月光色发丝 + 每 24px 一个刻度（像一把量日出的尺）
+                                    let ld = abs(p.y - hy)
+                                    col = col.mix(#xeceefe, (1.0 - smoothstep(0.3, 1.0, ld)) * 0.38)
+                                    let tk = (1.0 - step(1.0, p.x - floor(p.x / 24.0) * 24.0)) * step(hy, p.y) * (1.0 - step(hy + 4.0, p.y))
+                                    col = col.mix(#xeceefe, tk * 0.22)
+                                    let bf = smoothstep(sz.y - 14.0, sz.y, p.y)
+                                    col = col.mix(#x0e1230, bf)
+                                    return vec4(col.x, col.y, col.z, 1.0)
                                 }
-                                View{width: Fill height: Fill}
-                                Label{width: Fill text: cover_head max_lines: 3 draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 21}}
-                                View{width: Fill height: Fit flow: Right align: Align{x: 1.0 y: 1.0}
-                                    DarkBtn{text: "换一张头版" on_click: || cover_retry()}
+                            }
+                            draw_bg.sr: sky_r
+                        }
+                        View{width: Fill height: Fill flow: Down padding: Inset{left: 22 right: 22 top: 20 bottom: 0}
+                            View{width: Fill height: Fit flow: Right align: Align{y: 0.0} spacing: 10
+                                View{width: Fill height: Fit flow: Down
+                                    Label{text: "晨报卡" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: sky_title_size()}}
+                                }
+                                View{width: Fit height: Fit flow: Down spacing: 3 align: Align{x: 1.0}
+                                    Label{text: sky_issue() draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 11}}
+                                    if sky_h > 120.0 {
+                                        Label{text: sky_date() draw_text.color: secondary draw_text.text_style: theme.font_code{font_size: 10}}
+                                    }
+                                }
+                            }
+                            if sky_h > 180.0 {
+                                Label{width: Fill margin: Inset{top: 6} text: "每天一份可以核验的科技晨报" draw_text.color: secondary draw_text.text_style.font_size: 12}
+                            }
+                            View{width: Fill height: Fill}
+                            if sky_h > 124.0 {
+                                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8 padding: Inset{bottom: sky_h * 0.2 + 9.0}
+                                    View{width: 8 height: 8 show_bg: true new_batch: true
+                                        draw_bg +: {pixel: fn(){
+                                            let sz = self.rect_size
+                                            let d = length(self.pos * sz - sz * 0.5)
+                                            let k = 0.55 + 0.45 * sin(self.draw_pass.time * 3.2)
+                                            let a = (1.0 - smoothstep(2.4, 3.4, d)) + (1.0 - smoothstep(0.0, 4.0, d)) * 0.35 * k
+                                            let c = #xffc65c
+                                            return vec4(c.x * a, c.y * a, c.z * a, a)
+                                        }}
+                                    }
+                                    Label{width: Fill text: sky_status() draw_text.color: soft draw_text.text_style.font_size: 12}
+                                    Label{text: sky_pct() draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 10}}
                                 }
                             }
                         }
-                    } else if cover_state == "asking" || cover_state == "drawing" || cover_state == "failed" {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 4
-                            new_batch: true draw_bg.color: #x0e1424 draw_bg.border_radius: 14.0
-                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                            Label{width: Fill text: "今日头版 · 视觉主编" draw_text.color: #xffe2b8 draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: cover_note max_lines: 3 draw_text.color: #x9fb0d0 draw_text.text_style.font_size: 11}
-                        }
                     }
-                    // ---- 更正 · 报错了就写在最前面 ----
-                    if fix_count() > 0 {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
-                            new_batch: true show_bg: true draw_bg.color: #xfdf0ee draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: "更正 · 上一期有一处说法要改" draw_text.color: #xb03a2e draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: fix_line(0) max_lines: 4 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{visible: fix_count() > 1 width: Fill text: fix_line(1) max_lines: 4 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{visible: fix_count() > 2 width: Fill text: fix_line(2) max_lines: 4 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{width: Fill text: "本报自己记着这笔。截至今天累计更正 " + ("" + fix_total) + " 条。" draw_text.color: #x9b968c draw_text.text_style.font_size: 10}
-                        }
+                }
+            }
+            View{width: Fill height: Fill flow: Overlay
+                browse := ScrollYView{width: Fill height: Fill flow: Down spacing: 12 padding: Inset{left: 20 right: 20 top: 10 bottom: 220}
+                    View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{bottom: 4}
+                        home_title := Label{width: Fill text: "今天想读什么？" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 22}}
+                        intent_line := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 12}
                     }
-                    // ---- 口径不一致 · 两个说法都在，我不替你选 ----
-                    if clash_count() > 0 {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
-                            new_batch: true show_bg: true draw_bg.color: #xf4f0e8 draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: "本报注意到口径不一致" draw_text.color: #x8a6a24 draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: clash_line(0) max_lines: 5 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{visible: clash_count() > 1 width: Fill text: clash_line(1) max_lines: 5 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{width: Fill text: "两个数字都在，我不替你选。" draw_text.color: #x9b968c draw_text.text_style.font_size: 10}
+                    setup_box := View{width: Fill height: Fit flow: Down spacing: 12
+                        ask_in := TextInput{width: Fill height: 50 empty_text: "直接说也行：我想看芯片和 AI 的大新闻"
+                            on_change: |text| set_ask(text)
+                            draw_bg +: {color: paper color_hover: #x181d4a color_focus: #x181d4a color_empty: paper
+                                border_color: hair border_color_hover: #x3a4288 border_color_focus: gold border_color_empty: hair
+                                border_radius: 16.0}
+                            draw_text +: {color: ink color_hover: ink color_focus: ink color_empty: faint color_empty_hover: secondary}
                         }
-                    }
-                    // ---- 主编押下的三条预测（下一期自己回来对账） ----
-                    if fc_items.len() > 0 {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
-                            new_batch: true show_bg: true draw_bg.color: #xf4f0e8 draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: "主编押下的三条 · 下一期自己回来对账" draw_text.color: #x8a6a24 draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: fc_line(0) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{width: Fill text: fc_line(1) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{width: Fill text: fc_line(2) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{width: Fill text: fc_review_line() draw_text.color: #x9b968c draw_text.text_style.font_size: 10}
-                        }
-                    } else if fc_state == "asking" || fc_state == "checking" {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 4
-                            new_batch: true show_bg: true draw_bg.color: #xf4f0e8 draw_bg.border_radius: 14.0
-                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                            Label{width: Fill text: "主编的三个预测" draw_text.color: #x8a6a24 draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: fc_note max_lines: 3 draw_text.color: #x6e7280 draw_text.text_style.font_size: 11}
-                        }
-                    }
-                    // ---- 上一期押下的、已经对完账的记录 ----
-                    if fc_hist_text() != "" {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 3
-                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: fc_hist_text() max_lines: 10 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                        }
-                    }
-                    // ---- 线索进展 · 同一条线索，本报上次听到时是什么成色 ----
-                    if th_count() > 0 {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
-                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: th_line() draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: th_text(0) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{visible: th_count() > 1 width: Fill text: th_text(1) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                            Label{visible: th_count() > 2 width: Fill text: th_text(2) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                        }
-                    }
-                    let rows = show_rows()
-                    if rows.len() == 0 {
-                        View{width: Fill height: 120 align: Align{x: 0.5 y: 0.5}
-                            Label{text: empty_line() draw_text.color: secondary draw_text.text_style.font_size: 12}
-                        }
-                    }
-                    else for i r in rows {
-                        GestureView{width: Fill height: Fit on_tap: |x, y| open_story(r)
-                            let thumb = row_img(r)
-                            if thumb != "" {
-                                RowCardImg{col.rm.text: rank_text(i) + " · " + row_meta(r) col.rt.text: r.title
-                                    col.rsu.text: row_sum(r) col.rsu.visible: row_sum(r) != ""
-                                    col.rw.text: reason_of(r.id) col.rw.visible: reason_of(r.id) != ""
-                                    col.rp.text: panel_mark(r.id) col.rp.visible: panel_mark(r.id) != ""
-                                    rth.src: http_resource(thumb)}
-                            } else {
-                                RowCard{rm.text: rank_text(i) + " · " + row_meta(r) rt.text: r.title
-                                    rsu.text: row_sum(r) rsu.visible: row_sum(r) != ""
-                                    rw.text: reason_of(r.id) rw.visible: reason_of(r.id) != ""
-                                    rp.text: panel_mark(r.id) rp.visible: panel_mark(r.id) != ""}
+                        View{width: Fill height: Fit flow: Down spacing: 10 padding: Inset{top: 10}
+                            View{width: Fill height: Fit flow: Right align: Align{y: 0.5}
+                                SecLabel{text: "话题"}
+                            }
+                            View{width: Fill height: Fit flow: Flow.Right{wrap: true} spacing: 8
+                                chip_ai_on := ChipOn{text: "AI" on_click: || toggle_topic("ai")}
+                                chip_ai_off := ChipOff{text: "AI" on_click: || toggle_topic("ai")}
+                                chip_oss_on := ChipOn{text: "开源" on_click: || toggle_topic("oss")}
+                                chip_oss_off := ChipOff{text: "开源" on_click: || toggle_topic("oss")}
+                                chip_sec_on := ChipOn{text: "安全" on_click: || toggle_topic("sec")}
+                                chip_sec_off := ChipOff{text: "安全" on_click: || toggle_topic("sec")}
+                                chip_chip_on := ChipOn{text: "芯片" on_click: || toggle_topic("chip")}
+                                chip_chip_off := ChipOff{text: "芯片" on_click: || toggle_topic("chip")}
+                                chip_life_on := ChipOn{text: "生活" on_click: || toggle_topic("life")}
+                                chip_life_off := ChipOff{text: "生活" on_click: || toggle_topic("life")}
+                                chip_biz_on := ChipOn{text: "财经" on_click: || toggle_topic("biz")}
+                                chip_biz_off := ChipOff{text: "财经" on_click: || toggle_topic("biz")}
+                                chip_sci_on := ChipOn{text: "科学" on_click: || toggle_topic("sci")}
+                                chip_sci_off := ChipOff{text: "科学" on_click: || toggle_topic("sci")}
                             }
                         }
-                    }
-                    // ---- 回放出报过程 · 这一期是怎么做出来的 ----
-                    if phase == "done" && replay_text() != "" {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
-                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: "回放 · 这一期是怎么做出来的" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: replay_pool_line() max_lines: 2 draw_text.color: #x6e7280 draw_text.text_style.font_size: 11}
-                            Label{width: Fill text: replay_panel_line() max_lines: 10 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 11}
-                            Label{width: Fill text: replay_judge_line() max_lines: 16 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 11}
-                            Label{width: Fill text: charter_version_line() max_lines: 3 draw_text.color: #x9b968c draw_text.text_style.font_size: 10}
-                        }
-                    }
-                    // ---- 没上的三条 · 取舍被看见，才能被反驳 ----
-                    if drop_count() > 0 {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 4
-                            new_batch: true show_bg: true draw_bg.color: #xf7f5f0 draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: "没上的三条 · 以及为什么" draw_text.color: secondary draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: drop_line(0) max_lines: 3 draw_text.color: #x4a4c54 draw_text.text_style.font_size: 11}
-                            Label{visible: drop_count() > 1 width: Fill text: drop_line(1) max_lines: 3 draw_text.color: #x4a4c54 draw_text.text_style.font_size: 11}
-                            Label{visible: drop_count() > 2 width: Fill text: drop_line(2) max_lines: 3 draw_text.color: #x4a4c54 draw_text.text_style.font_size: 11}
-                        }
-                    }
-                    // ---- 决策台 · 同一批候选，换一类模型再判一次（Jev 式校准选择） ----
-                    // 主编那一版是「给人读的」：导语和理由都是句子。这一版是「给程序用的」：
-                    // 每条只回一个档位、一个概率、一个分。两者不一样的地方就是分歧，点一行可读原文。
-                    if vd_state != "" {
-                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
-                            new_batch: true show_bg: true draw_bg.color: #xeef2ff draw_bg.border_radius: 14.0
-                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                            Label{width: Fill text: "决策台 · 另一类模型只回「选择 + 置信度」" draw_text.color: #x3f4fae draw_text.text_style: theme.font_bold{font_size: 11}}
-                            Label{width: Fill text: "上面那版写给人读，这一版给程序用：档位只能落进预设四档，掉出去记 unknown，另加 0-100 进刊概率与 0-10 热度分。点一行可打开原报道。" max_lines: 4 draw_text.color: #x7a8098 draw_text.text_style.font_size: 10}
-                            Label{width: Fill text: vd_head_line() max_lines: 3 draw_text.color: #x4a4c54 draw_text.text_style.font_size: 11}
-                            if vd_state == "asking" {
-                                Label{width: Fill text: "决策台正在判…" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                        View{width: Fill height: Fit flow: Down spacing: 10 padding: Inset{top: 10}
+                            SecLabel{text: "信源 · 海外"}
+                            View{width: Fill height: Fit flow: Flow.Right{wrap: true} spacing: 8
+                                pk_hn_on := ChipOn{text: "HN" on_click: || toggle_plat("hn")}
+                                pk_hn_off := ChipOff{text: "HN" on_click: || toggle_plat("hn")}
+                                pk_techmeme_on := ChipOn{text: "TechMeme" on_click: || toggle_plat("techmeme")}
+                                pk_techmeme_off := ChipOff{text: "TechMeme" on_click: || toggle_plat("techmeme")}
+                                pk_github_on := ChipOn{text: "GitHub" on_click: || toggle_plat("github")}
+                                pk_github_off := ChipOff{text: "GitHub" on_click: || toggle_plat("github")}
+                                pk_arxiv_on := ChipOn{text: "arXiv" on_click: || toggle_plat("arxiv")}
+                                pk_arxiv_off := ChipOff{text: "arXiv" on_click: || toggle_plat("arxiv")}
+                                pk_youtube_on := ChipOn{text: "油管" on_click: || toggle_plat("youtube")}
+                                pk_youtube_off := ChipOff{text: "油管" on_click: || toggle_plat("youtube")}
                             }
-                            for k v in vd_rows {
-                                GestureView{width: Fill height: Fit on_tap: |x, y| vd_open(k)
-                                    RoundedView{width: Fill height: Fit flow: Down spacing: 2
-                                        new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 10.0
-                                        padding: Inset{top: 9 bottom: 9 left: 11 right: 11}
-                                        Label{width: Fill text: vd_row_text(k) max_lines: 3 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 11}
+                            SecLabel{text: "信源 · 国内"}
+                            View{width: Fill height: Fit flow: Flow.Right{wrap: true} spacing: 8
+                                pk_sspai_on := ChipOn{text: "少数派" on_click: || toggle_plat("sspai")}
+                                pk_sspai_off := ChipOff{text: "少数派" on_click: || toggle_plat("sspai")}
+                                pk_infoq_on := ChipOn{text: "InfoQ" on_click: || toggle_plat("infoq")}
+                                pk_infoq_off := ChipOff{text: "InfoQ" on_click: || toggle_plat("infoq")}
+                                pk_ithome_on := ChipOn{text: "IT之家" on_click: || toggle_plat("ithome")}
+                                pk_ithome_off := ChipOff{text: "IT之家" on_click: || toggle_plat("ithome")}
+                                pk_bili_on := ChipOn{text: "B站" on_click: || toggle_plat("bili")}
+                                pk_bili_off := ChipOff{text: "B站" on_click: || toggle_plat("bili")}
+                                pk_douyin_on := ChipOn{text: "抖音" on_click: || toggle_plat("douyin")}
+                                pk_douyin_off := ChipOff{text: "抖音" on_click: || toggle_plat("douyin")}
+                            }
+                        }
+                        RoundedView{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 10
+                            padding: Inset{top: 10 bottom: 10 left: 16 right: 10} margin: Inset{top: 8}
+                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 16.0
+                            draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            View{width: Fill height: Fit flow: Down spacing: 2
+                                Label{text: "本期条数" draw_text.color: soft draw_text.text_style.font_size: 13}
+                                Label{text: "编辑部会按这个上限取舍" draw_text.color: faint draw_text.text_style.font_size: 10}
+                            }
+                            NumBtn{text: "−" on_click: || bump(-1)}
+                            View{width: 40 height: Fit align: Align{x: 0.5}
+                                limit_label := Label{text: "10" draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 20}}
+                            }
+                            NumBtn{text: "+" on_click: || bump(1)}
+                        }
+                        gen_pane := View{visible: true width: Fill height: Fit flow: Down spacing: 10 padding: Inset{top: 8}
+                            HeroBtn{text: "生成今日晨报" on_click: || aq_start()}
+                            Label{width: Fill align: Align{x: 0.5} text: "先出一份取数计划，你批准之后才会联网" draw_text.color: faint draw_text.text_style.font_size: 11}
+                        }
+                    }
+                    // ---- 出报前的一问：主编先开口，读者答 A / B，也可以让他别问了 ----
+                    aq_pane := Panel{visible: false
+                        Label{width: Fill text: "出报前，主编想问一句" draw_text.color: accent draw_text.text_style.font_size: 12}
+                        aq_q := Label{width: Fill text: "" max_lines: 3 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 17}}
+                        View{width: Fill height: Fit flow: Down spacing: 8 padding: Inset{top: 4}
+                            aq_btn_a := GhostBtn{width: Fill text: "A" on_click: || aq_choose("a")}
+                            aq_btn_b := GhostBtn{width: Fill text: "B" on_click: || aq_choose("b")}
+                        }
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                            aq_note := Label{width: Fill text: "" draw_text.color: faint draw_text.text_style.font_size: 10}
+                            BarBtn{text: "你定，不用问" on_click: || aq_choose("skip")}
+                        }
+                    }
+                    plan_pane := Panel{visible: false
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5}
+                            Label{width: Fill text: "取数计划 · 等你批准" draw_text.color: accent draw_text.text_style.font_size: 12}
+                            Label{text: "未联网" draw_text.color: faint draw_text.text_style: theme.font_code{font_size: 10}}
+                        }
+                        plan_ask := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
+                        plan_ai := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
+                        RoundedView{width: Fill height: Fit flow: Down spacing: 6
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            new_batch: true show_bg: true draw_bg.color: surface2 draw_bg.border_radius: 12.0
+                            plan_topics := Label{width: Fill text: "" draw_text.color: soft draw_text.text_style.font_size: 13}
+                            plan_limit := Label{width: Fill text: "" draw_text.color: soft draw_text.text_style.font_size: 13}
+                            plan_hosts := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style: theme.font_code{font_size: 10}}
+                        }
+                        View{width: Fill height: Fit flow: Right spacing: 8 align: Align{y: 0.5} padding: Inset{top: 4}
+                            PrimaryBtn{width: Fill text: "批准并取数" on_click: || approve()}
+                            GhostBtn{text: "暂不" on_click: || deny()}
+                        }
+                    }
+                    judge_pane := Panel{visible: false spacing: 8
+                        judge_line := Label{width: Fill text: "" draw_text.color: gold draw_text.text_style: theme.font_bold{font_size: 15}}
+                        Label{width: Fill text: "三位编辑背靠背独立阅读，互相看不到对方的选择；随后由主编终审取舍。" draw_text.color: secondary draw_text.text_style.font_size: 12}
+                        RoundedView{width: Fill height: Fit flow: Down spacing: 6
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            new_batch: true show_bg: true draw_bg.color: surface2 draw_bg.border_radius: 12.0
+                            panel_head := Label{width: Fill text: "" draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 10}}
+                            p1 := Label{width: Fill text: "" draw_text.color: soft draw_text.text_style.font_size: 12}
+                            p2 := Label{width: Fill text: "" draw_text.color: soft draw_text.text_style.font_size: 12}
+                            p3 := Label{width: Fill text: "" draw_text.color: soft draw_text.text_style.font_size: 12}
+                        }
+                    }
+                    deny_pane := Panel{visible: false
+                        Label{width: Fill text: "已取消，没有发出任何网络请求" draw_text.color: gold draw_text.text_style: theme.font_bold{font_size: 15}}
+                        Label{width: Fill text: "你的授权是取数的前提；拒绝后不会读取任何来源。" draw_text.color: secondary draw_text.text_style.font_size: 12}
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5}
+                            GhostBtn{text: "重新开始" on_click: || restart()}
+                        }
+                    }
+                    hint_line := Label{width: Fill align: Align{x: 0.5} margin: Inset{top: 14} text: "这份报会记住你读过什么，越读越懂你；右下角的主编能说话，也能查本报档案。" draw_text.color: faint draw_text.text_style.font_size: 10}
+                }
+                // ---- 主编拒刊页：信源太薄时不出报。这不是失败，是拒绝。 ----
+                refuse_pane := View{visible: false width: Fill height: Fill flow: Down
+                    ScrollYView{width: Fill height: Fill flow: Down spacing: 14 padding: Inset{left: 20 right: 20 top: 12 bottom: 200}
+                        Label{width: Fill text: "今天这些消息我没有把握，不想拿一个二手转述来充今天的晨报。" max_lines: 4 draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 18}}
+                        Panel{spacing: 6
+                            Label{width: Fill text: "为什么不出" draw_text.color: accent draw_text.text_style.font_size: 12}
+                            refuse_why_l := Label{width: Fill text: "" max_lines: 8 draw_text.color: soft draw_text.text_style.font_size: 13}
+                            refuse_tier := Label{width: Fill text: "" max_lines: 3 draw_text.color: secondary draw_text.text_style: theme.font_code{font_size: 10}}
+                        }
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                            PrimaryBtn{width: Fill text: "仍要出报" on_click: || refuse_go()}
+                            GhostBtn{text: "重新开始" on_click: || restart()}
+                        }
+                        Label{width: Fill text: "拒刊是主编的判断，不是对你的束缚 —— 决定权在你手里，你说了出，我就出。" max_lines: 3 draw_text.color: faint draw_text.text_style.font_size: 11}
+                    }
+                }
+                run_pane := View{visible: false width: Fill height: Fill flow: Down
+                  run_scroll := ScrollYView{width: Fill height: Fill flow: Down
+                    View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 20 right: 20 top: 8 bottom: 12}
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                            status_line := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 17}}
+                            st_gen := Label{text: "" draw_text.color: faint draw_text.text_style: theme.font_code{font_size: 9}}
+                        }
+                        fail_line := Label{visible: false width: Fill text: "" draw_text.color: #xff8f80 draw_text.text_style.font_size: 11}
+                        ai_sum := Label{visible: false width: Fill text: "" draw_text.color: lav draw_text.text_style.font_size: 11}
+                        ai_intro := Label{visible: false width: Fill text: "" max_lines: 2 draw_text.color: soft draw_text.text_style: theme.font_italic{font_size: 13}}
+                        ai_note := Label{visible: false width: Fill text: "" draw_text.color: faint draw_text.text_style.font_size: 10}
+                        RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 12.0
+                            draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 9 bottom: 9 left: 12 right: 12}
+                            pipe_line := Label{width: Fill text: "" draw_text.color: soft draw_text.text_style: theme.font_code{font_size: 9}}
+                            st_src := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                            work_line := Label{visible: false width: Fill text: "" draw_text.color: gold draw_text.text_style.font_size: 11}
+                            tier_line := Label{visible: false width: Fill text: "" draw_text.color: faint draw_text.text_style.font_size: 10}
+                        }
+                        stale_line := Label{visible: false width: Fill text: "" draw_text.color: gold draw_text.text_style.font_size: 11}
+                    }
+                    list := View{width: Fill height: Fit flow: Down spacing: 10 padding: Inset{left: 16 right: 16 bottom: 6}
+                        on_render: || {
+                            if cover_on {
+                                View{width: Fill height: 196 flow: Overlay
+                                    new_batch: true
+                                    Image{width: Fill height: Fill fit: ImageFit.CropToFill draw_bg.color: #x0b1020 draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair src: http_resource(cover_url)}
+                                    SolidView{width: Fill height: Fill draw_bg.color: #x07101ecc draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair}
+                                    View{width: Fill height: Fill flow: Down spacing: 6 padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                                        View{width: Fill height: Fit flow: Right spacing: 6 align: Align{y: 0.5}
+                                            Label{width: Fill text: "晨报卡 · AI EDITION" draw_text.color: #xffe2b8 draw_text.text_style: theme.font_bold{font_size: 10}}
+                                            Label{text: cover_line() draw_text.color: #xa9badb draw_text.text_style.font_size: 9}
+                                        }
+                                        View{width: Fill height: Fill}
+                                        Label{width: Fill text: cover_head max_lines: 3 draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 21}}
+                                        View{width: Fill height: Fit flow: Right align: Align{x: 1.0 y: 1.0}
+                                            DarkBtn{text: "换一张头版" on_click: || cover_retry()}
+                                        }
+                                    }
+                                }
+                            } else if cover_state == "asking" || cover_state == "drawing" || cover_state == "failed" {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                                    new_batch: true draw_bg.color: #x10143a draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                                    Label{width: Fill text: "今日头版 · 视觉主编" draw_text.color: #xffe2b8 draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: cover_note max_lines: 3 draw_text.color: #x9fb0d0 draw_text.text_style.font_size: 11}
+                                }
+                            }
+                            // ---- 更正 · 报错了就写在最前面 ----
+                            if fix_count() > 0 {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                                    new_batch: true show_bg: true draw_bg.color: #x34183a draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: "更正 · 上一期有一处说法要改" draw_text.color: #xff8f80 draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: fix_line(0) max_lines: 4 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{visible: fix_count() > 1 width: Fill text: fix_line(1) max_lines: 4 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{visible: fix_count() > 2 width: Fill text: fix_line(2) max_lines: 4 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{width: Fill text: "本报自己记着这笔。截至今天累计更正 " + ("" + fix_total) + " 条。" draw_text.color: #x6c72a6 draw_text.text_style.font_size: 10}
+                                }
+                            }
+                            // ---- 口径不一致 · 两个说法都在，我不替你选 ----
+                            if clash_count() > 0 {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                                    new_batch: true show_bg: true draw_bg.color: #x1a1f4c draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: "本报注意到口径不一致" draw_text.color: #xf2b24a draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: clash_line(0) max_lines: 5 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{visible: clash_count() > 1 width: Fill text: clash_line(1) max_lines: 5 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{width: Fill text: "两个数字都在，我不替你选。" draw_text.color: #x6c72a6 draw_text.text_style.font_size: 10}
+                                }
+                            }
+                            // ---- 主编押下的三条预测（下一期自己回来对账） ----
+                            if fc_items.len() > 0 {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                                    new_batch: true show_bg: true draw_bg.color: #x1a1f4c draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: "主编押下的三条 · 下一期自己回来对账" draw_text.color: #xf2b24a draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: fc_line(0) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{width: Fill text: fc_line(1) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{width: Fill text: fc_line(2) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{width: Fill text: fc_review_line() draw_text.color: #x6c72a6 draw_text.text_style.font_size: 10}
+                                }
+                            } else if fc_state == "asking" || fc_state == "checking" {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                                    new_batch: true show_bg: true draw_bg.color: #x1a1f4c draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                                    Label{width: Fill text: "主编的三个预测" draw_text.color: #xf2b24a draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: fc_note max_lines: 3 draw_text.color: #x9ba0c9 draw_text.text_style.font_size: 11}
+                                }
+                            }
+                            // ---- 上一期押下的、已经对完账的记录 ----
+                            if fc_hist_text() != "" {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 3
+                                    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: fc_hist_text() max_lines: 10 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                }
+                            }
+                            // ---- 线索进展 · 同一条线索，本报上次听到时是什么成色 ----
+                            if th_count() > 0 {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                                    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: th_line() draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: th_text(0) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{visible: th_count() > 1 width: Fill text: th_text(1) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                    Label{visible: th_count() > 2 width: Fill text: th_text(2) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                                }
+                            }
+                            let rows = show_rows()
+                            if rows.len() == 0 {
+                                View{width: Fill height: 120 align: Align{x: 0.5 y: 0.5}
+                                    Label{text: empty_line() draw_text.color: secondary draw_text.text_style.font_size: 12}
+                                }
+                            }
+                            else for i r in rows {
+                                GestureView{width: Fill height: Fit on_tap: |x, y| open_story(r)
+                                    let thumb = row_img(r)
+                                    if thumb != "" {
+                                        RowCardImg{col.rm.text: rank_text(i) + " · " + row_meta(r) col.rt.text: r.title
+                                            col.rsu.text: row_sum(r) col.rsu.visible: row_sum(r) != ""
+                                            col.rw.text: reason_of(r.id) col.rw.visible: reason_of(r.id) != ""
+                                            col.rp.text: panel_mark(r.id) col.rp.visible: panel_mark(r.id) != ""
+                                            rth.src: http_resource(thumb)}
+                                    } else {
+                                        RowCard{rm.text: rank_text(i) + " · " + row_meta(r) rt.text: r.title
+                                            rsu.text: row_sum(r) rsu.visible: row_sum(r) != ""
+                                            rw.text: reason_of(r.id) rw.visible: reason_of(r.id) != ""
+                                            rp.text: panel_mark(r.id) rp.visible: panel_mark(r.id) != ""}
+                                    }
+                                }
+                            }
+                            // ---- 回放出报过程 · 这一期是怎么做出来的 ----
+                            if phase == "done" && replay_text() != "" {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                                    new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: "回放 · 这一期是怎么做出来的" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: replay_pool_line() max_lines: 2 draw_text.color: #x9ba0c9 draw_text.text_style.font_size: 11}
+                                    Label{width: Fill text: replay_panel_line() max_lines: 10 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                    Label{width: Fill text: replay_judge_line() max_lines: 16 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                    Label{width: Fill text: charter_version_line() max_lines: 3 draw_text.color: #x6c72a6 draw_text.text_style.font_size: 10}
+                                }
+                            }
+                            // ---- 没上的三条 · 取舍被看见，才能被反驳 ----
+                            if drop_count() > 0 {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                                    new_batch: true show_bg: true draw_bg.color: #x161b44 draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: "没上的三条 · 以及为什么" draw_text.color: secondary draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: drop_line(0) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                    Label{visible: drop_count() > 1 width: Fill text: drop_line(1) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                    Label{visible: drop_count() > 2 width: Fill text: drop_line(2) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                }
+                            }
+                            // ---- 决策台 · 同一批候选，换一类模型再判一次（Jev 式校准选择） ----
+                            // 主编那一版是「给人读的」：导语和理由都是句子。这一版是「给程序用的」：
+                            // 每条只回一个档位、一个概率、一个分。两者不一样的地方就是分歧，点一行可读原文。
+                            if vd_state != "" {
+                                RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                                    new_batch: true show_bg: true draw_bg.color: #x18205a draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                                    Label{width: Fill text: "决策台 · 另一类模型只回「选择 + 置信度」" draw_text.color: #xa9b6ff draw_text.text_style: theme.font_bold{font_size: 11}}
+                                    Label{width: Fill text: "上面那版写给人读，这一版给程序用：档位只能落进预设四档，掉出去记 unknown，另加 0-100 进刊概率与 0-10 热度分。点一行可打开原报道。" max_lines: 4 draw_text.color: #x7a8098 draw_text.text_style.font_size: 10}
+                                    Label{width: Fill text: vd_head_line() max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                    if vd_state == "asking" {
+                                        Label{width: Fill text: "决策台正在判…" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                                    }
+                                    for k v in vd_rows {
+                                        GestureView{width: Fill height: Fit on_tap: |x, y| vd_open(k)
+                                            RoundedView{width: Fill height: Fit flow: Down spacing: 2
+                                                new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 10.0
+                                                padding: Inset{top: 9 bottom: 9 left: 11 right: 11}
+                                                Label{width: Fill text: vd_row_text(k) max_lines: 3 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 11}
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    View{width: Fill height: Fit flow: Down spacing: 4 padding: Inset{left: 20 right: 20 top: 10 bottom: 96}
+                        pf_line := Label{visible: false width: Fill text: "" draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 9}}
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 6
+                            sel_line := Label{width: Fill text: "点任意条目，读这条新闻的来龙去脉" max_lines: 2 draw_text.color: faint draw_text.text_style.font_size: 10}
+                            BarBtn{text: "重新开始" on_click: || restart()}
+                        }
+                    }
+                  }
                 }
-            }
-            View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 14 right: 14 bottom: 60}
-                pf_line := Label{visible: false width: Fill text: "" draw_text.color: #x8a6a24 draw_text.text_style.font_size: 10}
-                sel_line := Label{width: Fill text: "点任意条目，在卡片里读这条新闻的来龙去脉；右下角的主编会听你说话，也能替你操作整个程序" draw_text.color: secondary draw_text.text_style.font_size: 11}
-                View{width: Fill height: 44 flow: Right align: Align{y: 0.5}
-                    GhostBtn{text: "重新开始" on_click: || restart()}
-                }
-            }
-        }
-        story_pane := View{visible: false width: Fill height: Fill flow: Down
-            new_batch: true show_bg: true draw_bg.color: ground
-            View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 10 right: 14 top: 8 bottom: 8}
-                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 6
-                    BarBtn{text: "返回晨报" on_click: || close_story()}
-                    BarBtn{text: "写封信追问" on_click: || iv_kick()}
-                    story_pos := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 10}
-                }
-                story_title := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 18}}
-                story_meta := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 11}
-            }
-            ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 bottom: 300}
-                art_pane := View{width: Fill height: Fit flow: Down
-                    on_render: || {
-                        if art_on {
-                            View{width: Fill height: Fit flow: Down spacing: 6
-                                Image{width: Fill height: 210 fit: ImageFit.CropToFill src: http_resource(art_url)}
-                                View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                                    Label{width: Fill text: art_line() draw_text.color: secondary draw_text.text_style.font_size: 10}
-                                    GhostBtn{text: "重画" on_click: || art_retry()}
-                                    GhostBtn{text: "收起" on_click: || art_off()}
-                                }
-                            }
-                        } else {
-                            View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                                Label{width: Fill text: art_line() draw_text.color: secondary draw_text.text_style.font_size: 10}
-                                if art_busy {
-                                    Label{text: "正在画…" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                story_pane := View{visible: false width: Fill height: Fill flow: Down
+                    View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 14 right: 20 top: 6 bottom: 12}
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 4
+                            BarBtn{text: "‹ 返回晨报" on_click: || close_story()}
+                            BarBtn{text: "写封信追问" on_click: || iv_kick()}
+                            story_pos := Label{width: Fill align: Align{x: 1.0} text: "" draw_text.color: faint draw_text.text_style: theme.font_code{font_size: 10}}
+                        }
+                        View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{left: 6}
+                            story_title := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 21}}
+                            story_meta := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style: theme.font_code{font_size: 10}}
+                        }
+                    }
+                    ScrollYView{width: Fill height: Fill flow: Down spacing: 10 padding: Inset{left: 14 right: 14 bottom: 300}
+                        art_pane := View{width: Fill height: Fit flow: Down
+                            on_render: || {
+                                if art_on {
+                                    View{width: Fill height: Fit flow: Down spacing: 6
+                                        Image{width: Fill height: 210 fit: ImageFit.CropToFill src: http_resource(art_url)}
+                                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                                            Label{width: Fill text: art_line() draw_text.color: secondary draw_text.text_style.font_size: 10}
+                                            GhostBtn{text: "重画" on_click: || art_retry()}
+                                            GhostBtn{text: "收起" on_click: || art_off()}
+                                        }
+                                    }
                                 } else {
-                                    BarBtn{text: "画一张配图" on_click: || art_retry()}
+                                    View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                                        Label{width: Fill text: art_line() draw_text.color: secondary draw_text.text_style.font_size: 10}
+                                        if art_busy {
+                                            Label{text: "正在画…" draw_text.color: secondary draw_text.text_style.font_size: 10}
+                                        } else {
+                                            BarBtn{text: "画一张配图" on_click: || art_retry()}
+                                        }
+                                    }
                                 }
                             }
                         }
+                        story_sum_box := RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            Label{width: Fill text: "官方摘要" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
+                            story_sum := Label{width: Fill text: "" max_lines: 8 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 13}
+                        }
+                        RoundedView{width: Fill height: Fit flow: Down spacing: 5
+                            new_batch: true show_bg: true draw_bg.color: #x1e1a52 draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            Label{width: Fill text: "AI 解读" draw_text.color: #xb9a6ff draw_text.text_style: theme.font_bold{font_size: 11}}
+                            story_state := Label{width: Fill text: "" draw_text.color: #x8a90c0 draw_text.text_style.font_size: 11}
+                            story_ai := Label{width: Fill text: "" max_lines: 20 draw_text.color: ink draw_text.text_style.font_size: 13}
+                        }
+                        arc_box := RoundedView{visible: false width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true show_bg: true draw_bg.color: #x231f4a draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            Label{width: Fill text: "本报追过这条线索" draw_text.color: #xf2b24a draw_text.text_style: theme.font_bold{font_size: 11}}
+                            arc_text := Label{width: Fill text: "" max_lines: 6 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                        }
+                        story_more_box := RoundedView{visible: false width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            story_more_head := Label{width: Fill text: "" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
+                            story_more_text := Label{width: Fill text: "" max_lines: 12 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                        }
+                        story_cmt_box := RoundedView{visible: false width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            story_cmt_head := Label{width: Fill text: "" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
+                            story_cmt_text := Label{width: Fill text: "" max_lines: 16 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                        }
+                        // ---- 主编的追问草稿：只写稿，绝不替读者发信 ----
+                        iv_pane := RoundedView{visible: false width: Fill height: Fit flow: Down spacing: 5
+                            new_batch: true show_bg: true draw_bg.color: #x1a1f4c draw_bg.border_radius: 16.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
+                            iv_head := Label{width: Fill text: "" draw_text.color: #xf2b24a draw_text.text_style: theme.font_bold{font_size: 11}}
+                            iv_text := Label{width: Fill text: "" max_lines: 14 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                            iv_note := Label{width: Fill text: "" max_lines: 3 draw_text.color: #x9ba0c9 draw_text.text_style.font_size: 10}
+                            View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+                                GhostBtn{text: "重写一封" on_click: || iv_kick()}
+                                BarBtn{text: "收起" on_click: || iv_reset()}
+                            }
+                        }
+                        RoundedView{width: Fill height: Fit flow: Down spacing: 4
+                            new_batch: true show_bg: true draw_bg.color: paper draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
+                            padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
+                            Label{width: Fill text: "这条消息的出处" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
+                            story_src := Label{width: Fill text: "" max_lines: 4 draw_text.color: #xc9cdf0 draw_text.text_style.font_size: 12}
+                            story_url := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x8a90c0 draw_text.text_style.font_size: 10}
+                        }
+                        View{width: Fill height: 44 flow: Right align: Align{y: 0.5} spacing: 8
+                            GhostBtn{text: "上一条" on_click: || story_step(-1)}
+                            GhostBtn{text: "下一条" on_click: || story_step(1)}
+                        }
                     }
-                }
-                story_sum_box := View{width: Fill height: Fit flow: Down spacing: 4
-                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
-                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                    Label{width: Fill text: "官方摘要" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                    story_sum := Label{width: Fill text: "" max_lines: 8 draw_text.color: #x3a3a3c draw_text.text_style.font_size: 13}
-                }
-                View{width: Fill height: Fit flow: Down spacing: 5
-                    new_batch: true show_bg: true draw_bg.color: #xf6f2ff draw_bg.border_radius: 12.0
-                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                    Label{width: Fill text: "AI 解读" draw_text.color: #x6a4bb8 draw_text.text_style: theme.font_bold{font_size: 11}}
-                    story_state := Label{width: Fill text: "" draw_text.color: #x8e8e93 draw_text.text_style.font_size: 11}
-                    story_ai := Label{width: Fill text: "" max_lines: 20 draw_text.color: ink draw_text.text_style.font_size: 13}
-                }
-                arc_box := View{visible: false width: Fill height: Fit flow: Down spacing: 4
-                    new_batch: true show_bg: true draw_bg.color: #xfff7f0 draw_bg.border_radius: 12.0
-                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                    Label{width: Fill text: "本报追过这条线索" draw_text.color: #x8a6a24 draw_text.text_style: theme.font_bold{font_size: 11}}
-                    arc_text := Label{width: Fill text: "" max_lines: 6 draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
-                }
-                story_more_box := View{visible: false width: Fill height: Fit flow: Down spacing: 4
-                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
-                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                    story_more_head := Label{width: Fill text: "" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                    story_more_text := Label{width: Fill text: "" max_lines: 12 draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
-                }
-                story_cmt_box := View{visible: false width: Fill height: Fit flow: Down spacing: 4
-                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
-                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                    story_cmt_head := Label{width: Fill text: "" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                    story_cmt_text := Label{width: Fill text: "" max_lines: 16 draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
-                }
-                // ---- 主编的追问草稿：只写稿，绝不替读者发信 ----
-                iv_pane := View{visible: false width: Fill height: Fit flow: Down spacing: 5
-                    new_batch: true show_bg: true draw_bg.color: #xf4f0e8 draw_bg.border_radius: 14.0
-                    padding: Inset{top: 13 bottom: 13 left: 14 right: 14}
-                    iv_head := Label{width: Fill text: "" draw_text.color: #x8a6a24 draw_text.text_style: theme.font_bold{font_size: 11}}
-                    iv_text := Label{width: Fill text: "" max_lines: 14 draw_text.color: #x3d3f47 draw_text.text_style.font_size: 12}
-                    iv_note := Label{width: Fill text: "" max_lines: 3 draw_text.color: #x6e7280 draw_text.text_style.font_size: 10}
-                    View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
-                        GhostBtn{text: "重写一封" on_click: || iv_kick()}
-                        BarBtn{text: "收起" on_click: || iv_reset()}
-                    }
-                }
-                View{width: Fill height: Fit flow: Down spacing: 4
-                    new_batch: true show_bg: true draw_bg.color: #xffffff draw_bg.border_radius: 12.0
-                    padding: Inset{top: 12 bottom: 12 left: 14 right: 14}
-                    Label{width: Fill text: "这条消息的出处" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 11}}
-                    story_src := Label{width: Fill text: "" max_lines: 4 draw_text.color: #x3a3a3c draw_text.text_style.font_size: 12}
-                    story_url := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x8e8e93 draw_text.text_style.font_size: 10}
-                }
-                View{width: Fill height: 44 flow: Right align: Align{y: 0.5} spacing: 8
-                    GhostBtn{text: "上一条" on_click: || story_step(-1)}
-                    GhostBtn{text: "下一条" on_click: || story_step(1)}
                 }
             }
         }
         ag_dock := View{width: Fill height: Fill flow: Down align: Align{x: 0.5 y: 1.0}
             ag_panel := RoundedView{visible: false width: Fill height: Fit flow: Down spacing: 10
-                new_batch: true draw_bg.color: night draw_bg.border_radius: 18.0
-                padding: Inset{top: 13 bottom: 15 left: 14 right: 14}
+                new_batch: true draw_bg.color: #x10143a draw_bg.border_radius: 22.0 draw_bg.border_size: 1.0 draw_bg.border_color: #x2f3778
+                margin: Inset{left: 12 right: 12} padding: Inset{top: 16 bottom: 16 left: 16 right: 16}
                 View{width: Fill height: Fit flow: Right spacing: 7 align: Align{y: 0.5}
-                    Label{text: "AI 主编" draw_text.color: #xffe2b8 draw_text.text_style: theme.font_bold{font_size: 13}}
-                    Label{text: "常驻" draw_text.color: #x6d7d9c draw_text.text_style.font_size: 9}
-                    ag_note := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x93a4c6 draw_text.text_style.font_size: 10}
+                    Label{text: "AI 主编" draw_text.color: #xfff1cf draw_text.text_style: theme.font_bold{font_size: 13}}
+                    Label{text: "常驻" draw_text.color: faint draw_text.text_style.font_size: 9}
+                    ag_note := Label{width: Fill text: "" max_lines: 2 draw_text.color: secondary draw_text.text_style.font_size: 10}
                     BarBtn{text: "清空" on_click: || ag_clear()}
                     BarBtn{text: "收起" on_click: || ag_toggle()}
                 }
-                ag_caps := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x6f7f9e draw_text.text_style.font_size: 9}
+                ag_caps := Label{width: Fill text: "" max_lines: 2 draw_text.color: faint draw_text.text_style.font_size: 9}
                 ag_iv := Label{visible: false width: Fill text: "" draw_text.color: #x8fe0b0 draw_text.text_style.font_size: 9}
                 View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
                     vc_mic := MicBtn{text: "🎙 说话" on_click: || vc_toggle()}
                     rv_btn := ChipDk{text: "念这一期" on_click: || rv_toggle()}
                     vc_autob := ChipDk{text: "自动朗读" on_click: || vc_toggle_auto()}
                 }
-                vc_note := Label{width: Fill text: "" max_lines: 2 draw_text.color: #x93a4c6 draw_text.text_style.font_size: 10}
+                vc_note := Label{width: Fill text: "" max_lines: 2 draw_text.color: secondary draw_text.text_style.font_size: 10}
                 ag_log_box := ScrollYView{width: Fill height: 206 flow: Down spacing: 5
                     on_render: || {
                         if ag_log.len() == 0 {
-                            Label{width: Fill text: "试着对我说：只看芯片和 AI，生成今天的晨报。" draw_text.color: #x7c8db0 draw_text.text_style.font_size: 11}
+                            Label{width: Fill text: "试着对我说：只看芯片和 AI，生成今天的晨报。" draw_text.color: secondary draw_text.text_style.font_size: 11}
                         }
                         else for e in ag_log {
                             if e.who == "me" {
                                 View{width: Fill height: Fit flow: Right
                                     RoundedView{width: Fit height: Fit flow: Down
-                                        new_batch: true draw_bg.color: #x24304d draw_bg.border_radius: 12.0
+                                        new_batch: true draw_bg.color: #x262d68 draw_bg.border_radius: 14.0 draw_bg.border_size: 1.0 draw_bg.border_color: hair
                                         padding: Inset{top: 7 bottom: 7 left: 11 right: 11}
-                                        Label{width: Fit text: e.text max_lines: 3 draw_text.color: #xe8eefc draw_text.text_style.font_size: 12}
+                                        Label{width: Fit text: e.text max_lines: 3 draw_text.color: ink draw_text.text_style.font_size: 12}
                                     }
                                 }
                             }
@@ -5136,8 +5461,8 @@ HostedView{width: Fill height: Fill
                             }
                             else {
                                 View{width: Fill height: Fit flow: Right spacing: 6 align: Align{y: 0.0}
-                                    Label{text: "主编" draw_text.color: #xffe2b8 draw_text.text_style: theme.font_bold{font_size: 10}}
-                                    Label{width: Fill text: e.text max_lines: 3 draw_text.color: #xdbe4f7 draw_text.text_style.font_size: 12}
+                                    Label{text: "主编" draw_text.color: #xfff1cf draw_text.text_style: theme.font_bold{font_size: 10}}
+                                    Label{width: Fill text: e.text max_lines: 3 draw_text.color: soft draw_text.text_style.font_size: 12}
                                 }
                             }
                         }
@@ -5145,10 +5470,10 @@ HostedView{width: Fill height: Fill
                 }
                 View{width: Fill height: Fit flow: Right spacing: 8
                     ag_in := TextInput{width: Fill height: 42 empty_text: "对主编说一句话…" on_change: |t| ag_set_draft(t)
-                        draw_bg +: {color: #x1a2338 color_hover: #x1a2338 color_focus: #x1f2a44 color_empty: #x1a2338
-                            border_color: #x2b3a5e border_color_hover: #x2b3a5e border_color_focus: accent border_color_empty: #x2b3a5e
+                        draw_bg +: {color: #x151a43 color_hover: #x151a43 color_focus: #x181d4a color_empty: #x151a43
+                            border_color: #x2b3373 border_color_hover: #x2b3373 border_color_focus: accent border_color_empty: #x2b3373
                             border_radius: 12.0}
-                        draw_text +: {color: #xe8eefc color_hover: #xe8eefc color_focus: #xe8eefc color_empty: #x6f7f9e color_empty_hover: #x6f7f9e}
+                        draw_text +: {color: ink color_hover: ink color_focus: ink color_empty: faint color_empty_hover: faint}
                     }
                     PrimaryBtn{text: "发送" on_click: || ag_send()}
                 }
@@ -5165,7 +5490,7 @@ HostedView{width: Fill height: Fill
             // ---- 底部常驻条：左边是记忆与麦克风，右边是主编的形象和入口 ----
             View{width: Fill height: Fit flow: Right align: Align{x: 1.0 y: 1.0} spacing: 9 padding: Inset{left: 14 right: 14 bottom: 14 top: 6}
                 vc_pill_mic := PillBtn{visible: false text: "🎙" on_click: || vc_toggle()}
-                arc_pill := Label{width: Fill height: Fit text: "" max_lines: 2 draw_text.color: #x9b968c draw_text.text_style.font_size: 9}
+                arc_pill := Label{width: Fill height: Fit text: "" max_lines: 2 draw_text.color: #x6c72a6 draw_text.text_style.font_size: 9}
                 View{width: 8 height: 1}
                 // 主编的形象：纯 shader 画出来的小家伙，会呼吸、会眨眼、头顶有晨光
                 // 主编的形象 · 咕嘎企鹅（纯 shader 手绘：形体由距离场给出，立体感由法线光照算出）
@@ -5317,216 +5642,103 @@ HostedView{width: Fill height: Fill
                 ag_pill := PillBtn{text: "● AI 主编" on_click: || ag_toggle()}
             }
         }
-        cg := View{width: Fill height: Fill show_bg: true
-            new_batch: true
-            draw_bg +: {
-                pixel: fn() {
-                    let cgT = self.draw_pass.time * 1.0
-                    let cgSz = self.rect_size
-                    let cgP = self.pos * cgSz
-                    let cgCx = cgSz.x * 0.5
-                    let cgCy = cgSz.y * 0.5
-                    let cgRelX = cgP.x - cgSz.x * 0.5
-                    let cgRelY = cgP.y - cgSz.y * 0.5
-                    let cgInkA = #x07090f
-                    let cgInkB = #x0d1220
-                    let cgGrid = #x223050
-                    let cgDawn = #xffd39a
-                    let cgHot = #xfff6e6
-                    let cgAcc = #xe0245e
-
-                    let cgVg = clamp(cgP.y / cgSz.y, 0.0, 1.0)
-                    var cgCol = cgInkA.mix(cgInkB, cgVg * 0.9)
-
-                    let cgGA = smoothstep(0.55 1.70 cgT) * 0.5
-                    let cgCell = 44.0
-                    let cgDx = abs(fract(cgP.x / cgCell + 0.5) - 0.5) * cgCell
-                    let cgDy = abs(fract(cgP.y / cgCell + 0.5) - 0.5) * cgCell
-                    let cgGl = (1.0 - smoothstep(0.0 1.2 min(cgDx cgDy))) * cgGA
-                    cgCol = cgCol.mix(cgGrid.mix(cgDawn, 0.22), cgGl)
-
-                    let cgRise = smoothstep(1.70 2.90 cgT)
-                    let cgBandY = cgSz.y * (1.15 - 1.35 * cgRise)
-                    let cgDb = abs(cgP.y - cgBandY)
-                    let cgBand = 1.0 - smoothstep(0.0 190.0 cgDb)
-                    let cgCore = 1.0 - smoothstep(0.0 34.0 cgDb)
-                    let cgBx = 1.0 - smoothstep(0.0 230.0 abs(cgP.x - cgCx))
-                    cgCol = cgCol.mix(cgDawn, cgBand * cgBx * 0.42)
-                    cgCol = cgCol.mix(cgHot, cgCore * cgBx * 0.85)
-
-                    let cgPa = smoothstep(0.25 2.60 cgT)
-                    let cgPd = 1.0 - cgPa
-                    let cgKk = cgPa * cgPa
-
-                    let cgR0 = 300.0 * (1.0 - cgKk) + 46.0 * cgKk
-                    let cgA0 = 0.4 + cgT * 0.85
-                    let cgM0 = (1.0 - smoothstep(0.0 3.2 length(cgP - vec2(cgCx + cos(cgA0) * cgR0 * 1.15, cgCy + sin(cgA0) * cgR0)))) * (0.45 + 0.55 * cgPd)
-                    cgCol = cgCol.mix(cgHot, cgM0 * 0.95)
-
-                    let cgR1 = 340.0 * (1.0 - cgKk) + 62.0 * cgKk
-                    let cgA1 = 2.1 + cgT * 0.72
-                    let cgM1 = (1.0 - smoothstep(0.0 2.8 length(cgP - vec2(cgCx + cos(cgA1) * cgR1 * 1.25, cgCy + sin(cgA1) * cgR1)))) * (0.42 + 0.58 * cgPd)
-                    cgCol = cgCol.mix(cgDawn, cgM1 * 0.9)
-
-                    let cgR2 = 268.0 * (1.0 - cgKk) + 38.0 * cgKk
-                    let cgA2 = 3.6 + cgT * 1.05
-                    let cgM2 = (1.0 - smoothstep(0.0 2.6 length(cgP - vec2(cgCx + cos(cgA2) * cgR2 * 1.05, cgCy + sin(cgA2) * cgR2)))) * (0.4 + 0.6 * cgPd)
-                    cgCol = cgCol.mix(#xffe9c4, cgM2 * 0.9)
-
-                    let cgR3 = 380.0 * (1.0 - cgKk) + 78.0 * cgKk
-                    let cgA3 = 5.2 + cgT * 0.62
-                    let cgM3 = (1.0 - smoothstep(0.0 2.4 length(cgP - vec2(cgCx + cos(cgA3) * cgR3 * 1.35, cgCy + sin(cgA3) * cgR3)))) * (0.38 + 0.62 * cgPd)
-                    cgCol = cgCol.mix(cgDawn, cgM3 * 0.85)
-
-                    let cgOrb = smoothstep(0.30 1.20 cgT) * (1.0 - smoothstep(2.70 3.10 cgT))
-                    let cgCxr = cgRelX * cos(0.0 - 0.42) - cgRelY * sin(0.0 - 0.42)
-                    let cgCyr = cgRelX * sin(0.0 - 0.42) + cgRelY * cos(0.0 - 0.42)
-                    let cgRing = abs(length(vec2(cgCxr / 196.0, cgCyr / 64.0)) - 1.0)
-                    let cgOrbI = (1.0 - smoothstep(0.0 0.055 cgRing)) * cgOrb
-                    cgCol = cgCol.mix(cgDawn, cgOrbI * 0.55)
-
-                    let cgSlY = cgSz.y * fract(cgT * 0.14 + 0.05)
-                    let cgSl = (1.0 - smoothstep(0.0 2.5 abs(cgP.y - cgSlY))) * (1.0 - smoothstep(2.90 3.35 cgT))
-                    cgCol = cgCol.mix(cgAcc, cgSl * 0.8)
-
-
-                    // ---- 咕嘎企鹅登场：随破晓光带一同从下方升起 ----
-                    let pgRise = smoothstep(1.55 2.75 cgT)
-                    let pgFade = smoothstep(1.55 2.35 cgT)
-                    let pgScale = min(cgSz.x, cgSz.y) * 0.30 * (0.86 + 0.14 * pgRise)
-                    let pgCy0 = cgCy + cgSz.y * (0.92 - 0.66 * pgRise)
-                    let pgUx = (cgP.x - cgCx) / pgScale
-                    let pgUy = (cgP.y - pgCy0) / pgScale
-                    let pgLdir = normalize(vec3(-0.46, -0.70, 0.58))
-                    let pgHv = normalize(vec3(-0.26, -0.40, 1.55))
-                    let pgBt = fract(cgT * 0.278)
-                    let pgShut = 1.0 - smoothstep(0.0 0.055 abs(pgBt - 0.5))
-                    let pgEyeK = 1.0 - pgShut * 0.93
-                    let pgq0 = vec2((pgUx - (-0.45)) / 0.12, (pgUy - (0.26)) / 0.24)
-                    let pgd0 = length(pgq0)
-                    let pgm0 = 1.0 - smoothstep(0.93 1.0 pgd0)
-                    let pgz0 = sqrt(max(0.0, 1.0 - pgd0 * pgd0))
-                    let pgn0 = normalize(vec3(pgq0.x, pgq0.y, pgz0))
-                    let pgl0 = 0.40 + 0.74 * max(0.0, dot(pgn0, pgLdir))
-                    let pgc0 = #x2b2f3a * pgl0 + #xffffff * pow(max(0.0, dot(pgn0, pgHv)), 16.0) * 0.2
-                    cgCol = cgCol.mix(pgc0, pgm0 * pgFade)
-                    let pgq1 = vec2((pgUx - (0.45)) / 0.12, (pgUy - (0.26)) / 0.24)
-                    let pgd1 = length(pgq1)
-                    let pgm1 = 1.0 - smoothstep(0.93 1.0 pgd1)
-                    let pgz1 = sqrt(max(0.0, 1.0 - pgd1 * pgd1))
-                    let pgn1 = normalize(vec3(pgq1.x, pgq1.y, pgz1))
-                    let pgl1 = 0.40 + 0.74 * max(0.0, dot(pgn1, pgLdir))
-                    let pgc1 = #x2b2f3a * pgl1 + #xffffff * pow(max(0.0, dot(pgn1, pgHv)), 16.0) * 0.2
-                    cgCol = cgCol.mix(pgc1, pgm1 * pgFade)
-                    let pgq2 = vec2((pgUx - (-0.19)) / 0.155, (pgUy - (0.82)) / 0.078)
-                    let pgd2 = length(pgq2)
-                    let pgm2 = 1.0 - smoothstep(0.93 1.0 pgd2)
-                    let pgz2 = sqrt(max(0.0, 1.0 - pgd2 * pgd2))
-                    let pgn2 = normalize(vec3(pgq2.x, pgq2.y, pgz2))
-                    let pgl2 = 0.40 + 0.74 * max(0.0, dot(pgn2, pgLdir))
-                    let pgc2 = #xf59a2e * pgl2 + #xffffff * pow(max(0.0, dot(pgn2, pgHv)), 26.0) * 0.42
-                    cgCol = cgCol.mix(pgc2, pgm2 * pgFade)
-                    let pgq3 = vec2((pgUx - (0.19)) / 0.155, (pgUy - (0.82)) / 0.078)
-                    let pgd3 = length(pgq3)
-                    let pgm3 = 1.0 - smoothstep(0.93 1.0 pgd3)
-                    let pgz3 = sqrt(max(0.0, 1.0 - pgd3 * pgd3))
-                    let pgn3 = normalize(vec3(pgq3.x, pgq3.y, pgz3))
-                    let pgl3 = 0.40 + 0.74 * max(0.0, dot(pgn3, pgLdir))
-                    let pgc3 = #xf59a2e * pgl3 + #xffffff * pow(max(0.0, dot(pgn3, pgHv)), 26.0) * 0.42
-                    cgCol = cgCol.mix(pgc3, pgm3 * pgFade)
-                    let pgq4 = vec2((pgUx - (0.0)) / 0.46, (pgUy - (0.3)) / 0.5)
-                    let pgd4 = length(pgq4)
-                    let pgm4 = 1.0 - smoothstep(0.93 1.0 pgd4)
-                    let pgz4 = sqrt(max(0.0, 1.0 - pgd4 * pgd4))
-                    let pgn4 = normalize(vec3(pgq4.x, pgq4.y, pgz4))
-                    let pgl4 = 0.40 + 0.74 * max(0.0, dot(pgn4, pgLdir))
-                    let pgc4 = #x2b2f3a * pgl4 + #xffffff * pow(max(0.0, dot(pgn4, pgHv)), 16.0) * 0.3
-                    cgCol = cgCol.mix(pgc4, pgm4 * pgFade)
-                    let pgq5 = vec2((pgUx - (0.0)) / 0.3, (pgUy - (0.345)) / 0.36)
-                    let pgd5 = length(pgq5)
-                    let pgm5 = 1.0 - smoothstep(0.93 1.0 pgd5)
-                    let pgz5 = sqrt(max(0.0, 1.0 - pgd5 * pgd5))
-                    let pgn5 = normalize(vec3(pgq5.x, pgq5.y, pgz5))
-                    let pgl5 = 0.40 + 0.74 * max(0.0, dot(pgn5, pgLdir))
-                    let pgc5 = #xf5f5f7 * pgl5 + #xffffff * pow(max(0.0, dot(pgn5, pgHv)), 18.0) * 0.24
-                    cgCol = cgCol.mix(pgc5, pgm5 * pgFade)
-                    let pgq6 = vec2((pgUx - (0.0)) / 0.44, (pgUy - (-0.42)) / 0.4)
-                    let pgd6 = length(pgq6)
-                    let pgm6 = 1.0 - smoothstep(0.93 1.0 pgd6)
-                    let pgz6 = sqrt(max(0.0, 1.0 - pgd6 * pgd6))
-                    let pgn6 = normalize(vec3(pgq6.x, pgq6.y, pgz6))
-                    let pgl6 = 0.40 + 0.74 * max(0.0, dot(pgn6, pgLdir))
-                    let pgc6 = #x2b2f3a * pgl6 + #xffffff * pow(max(0.0, dot(pgn6, pgHv)), 16.0) * 0.3
-                    cgCol = cgCol.mix(pgc6, pgm6 * pgFade)
-                    let pgq7 = vec2((pgUx - (0.0)) / 0.32, (pgUy - (-0.36)) / 0.3)
-                    let pgd7 = length(pgq7)
-                    let pgm7 = 1.0 - smoothstep(0.93 1.0 pgd7)
-                    let pgz7 = sqrt(max(0.0, 1.0 - pgd7 * pgd7))
-                    let pgn7 = normalize(vec3(pgq7.x, pgq7.y, pgz7))
-                    let pgl7 = 0.40 + 0.74 * max(0.0, dot(pgn7, pgLdir))
-                    let pgc7 = #xf5f5f7 * pgl7 + #xffffff * pow(max(0.0, dot(pgn7, pgHv)), 18.0) * 0.24
-                    cgCol = cgCol.mix(pgc7, pgm7 * pgFade)
-                    let pgq8 = vec2((pgUx - (0.0)) / 0.11, (pgUy - (-0.295)) / 0.078)
-                    let pgd8 = length(pgq8)
-                    let pgm8 = 1.0 - smoothstep(0.93 1.0 pgd8)
-                    let pgz8 = sqrt(max(0.0, 1.0 - pgd8 * pgd8))
-                    let pgn8 = normalize(vec3(pgq8.x, pgq8.y, pgz8))
-                    let pgl8 = 0.40 + 0.74 * max(0.0, dot(pgn8, pgLdir))
-                    let pgc8 = #xf59a2e * pgl8 + #xffffff * pow(max(0.0, dot(pgn8, pgHv)), 30.0) * 0.5
-                    cgCol = cgCol.mix(pgc8, pgm8 * pgFade)
-                    let pgq9 = vec2((pgUx - (-0.165)) / 0.072, (pgUy - (-0.47)) / (0.088 * pgEyeK))
-                    let pgd9 = length(pgq9)
-                    let pgm9 = 1.0 - smoothstep(0.93 1.0 pgd9)
-                    let pgz9 = sqrt(max(0.0, 1.0 - pgd9 * pgd9))
-                    let pgn9 = normalize(vec3(pgq9.x, pgq9.y, pgz9))
-                    let pgl9 = 0.40 + 0.74 * max(0.0, dot(pgn9, pgLdir))
-                    let pgc9 = #x14161c * pgl9 + #xffffff * pow(max(0.0, dot(pgn9, pgHv)), 40.0) * 0.55
-                    cgCol = cgCol.mix(pgc9, pgm9 * pgFade)
-                    let pgq10 = vec2((pgUx - (0.165)) / 0.072, (pgUy - (-0.47)) / (0.088 * pgEyeK))
-                    let pgd10 = length(pgq10)
-                    let pgm10 = 1.0 - smoothstep(0.93 1.0 pgd10)
-                    let pgz10 = sqrt(max(0.0, 1.0 - pgd10 * pgd10))
-                    let pgn10 = normalize(vec3(pgq10.x, pgq10.y, pgz10))
-                    let pgl10 = 0.40 + 0.74 * max(0.0, dot(pgn10, pgLdir))
-                    let pgc10 = #x14161c * pgl10 + #xffffff * pow(max(0.0, dot(pgn10, pgHv)), 40.0) * 0.55
-                    cgCol = cgCol.mix(pgc10, pgm10 * pgFade)
-                    let pgq11 = vec2((pgUx - (-0.135)) / 0.026, (pgUy - (-0.512)) / (0.026 * pgEyeK))
-                    let pgd11 = length(pgq11)
-                    let pgm11 = 1.0 - smoothstep(0.93 1.0 pgd11)
-                    let pgz11 = sqrt(max(0.0, 1.0 - pgd11 * pgd11))
-                    let pgn11 = normalize(vec3(pgq11.x, pgq11.y, pgz11))
-                    let pgl11 = 0.40 + 0.74 * max(0.0, dot(pgn11, pgLdir))
-                    let pgc11 = #xffffff * pgl11
-                    cgCol = cgCol.mix(pgc11, pgm11 * pgFade)
-                    let pgq12 = vec2((pgUx - (0.135)) / 0.026, (pgUy - (-0.512)) / (0.026 * pgEyeK))
-                    let pgd12 = length(pgq12)
-                    let pgm12 = 1.0 - smoothstep(0.93 1.0 pgd12)
-                    let pgz12 = sqrt(max(0.0, 1.0 - pgd12 * pgd12))
-                    let pgn12 = normalize(vec3(pgq12.x, pgq12.y, pgz12))
-                    let pgl12 = 0.40 + 0.74 * max(0.0, dot(pgn12, pgLdir))
-                    let pgc12 = #xffffff * pgl12
-                    cgCol = cgCol.mix(pgc12, pgm12 * pgFade)
-                    let pghd = length(vec2(pgUx / 0.360, (pgUy + 0.920) / 0.105))
-                    let pgring = (1.0 - smoothstep(0.0 0.16 abs(pghd - 1.0))) * 0.88
-                    cgCol = cgCol.mix(#xffd39a, pgring * pgFade)
-                    let cgFlash = smoothstep(2.90 3.08 cgT)
-                    cgCol = cgCol.mix(#xffffff, cgFlash * 0.94)
-
-                    let cgOut = 1.0
-                    return vec4(cgCol.x * cgOut cgCol.y * cgOut cgCol.z * cgOut cgOut)
+        // ---- 片头「睁眼」：夜里画一条地平线 → 点燃 → 夜色从地平线向上下张开，露出同一条地平线 ----
+        cg := View{width: Fill height: Fill flow: Overlay
+            cg_veil := SolidView{width: Fill height: Fill draw_bg.color: #x05071a}
+            cg_layer := View{width: Fill height: Fill flow: Overlay
+                on_render: || {
+                    View{width: Fill height: Fill show_bg: true new_batch: true
+                        draw_bg +: {
+                            ip: instance(0.0)
+                            ig: instance(0.0)
+                            ic: instance(0.0)
+                            ia: instance(0.0)
+                            ihy: instance(186.0)
+                            pixel: fn(){
+                                let sz = self.rect_size
+                                let p = self.pos * sz
+                                let t = self.draw_pass.time
+                                let hy = self.ihy
+                                let v = clamp(p.y / sz.y, 0.0, 1.0)
+                                var col = #x05071a.mix(#x12163f, v)
+                                // 星
+                                let cell = floor(p / 23.0)
+                                let h1 = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453)
+                                let h2 = fract(sin(dot(cell, vec2(269.5, 183.3))) * 43758.5453)
+                                let sp = (cell + vec2(0.2 + 0.6 * h1, 0.2 + 0.6 * h2)) * 23.0
+                                let sd = length(p - sp)
+                                let tw = 0.5 + 0.5 * sin(t * (1.5 + h1 * 3.0) + h2 * 6.28)
+                                let star = (1.0 - smoothstep(0.2, 1.3, sd)) * step(0.72, h1) * tw * self.ia
+                                col = col.mix(#xdfe3ff, star * (1.0 - self.ig * 0.6))
+                                // 点燃后：地平线上方泛起一层暖色，太阳位置透出晨光
+                                let sx = sz.x * 0.76
+                                let above = 1.0 - smoothstep(hy - 0.6, hy + 0.6, p.y)
+                                let warm = smoothstep(hy - 220.0, hy, p.y) * above * self.ig
+                                col = col.mix(#x3a2a66, warm * 0.55)
+                                let dg = length(vec2((p.x - sx) * 0.45, (p.y - hy)))
+                                let glow = exp(-dg / 34.0) * self.ig
+                                col = col.mix(#xff8a7a.mix(#xffc65c, exp(-dg / 20.0)), clamp(glow, 0.0, 1.0))
+                                // 地平线：底轨 + 进度线（玫瑰→金）+ 光晕 + 线头火花
+                                let ld = abs(p.y - hy)
+                                col = col.mix(#x8a90c0, (1.0 - smoothstep(0.3, 1.0, ld)) * 0.16 * self.ia)
+                                let x0 = 24.0 * (1.0 - self.ig)
+                                let x1 = 24.0 + (sz.x - 48.0) * self.ip + 24.0 * self.ig
+                                let onx = step(x0, p.x) * (1.0 - step(x1, p.x))
+                                let line = (1.0 - smoothstep(0.5, 1.5, ld)) * onx
+                                let lglow = exp(-ld / 5.0) * onx * (0.30 + 0.5 * self.ig)
+                                let lc = #xff7a8a.mix(#xffc65c, clamp(p.x / sz.x, 0.0, 1.0))
+                                col = col.mix(lc, clamp(line + lglow, 0.0, 1.0))
+                                let hd = length(p - vec2(x1, hy))
+                                col = col.mix(#xfff3d6, clamp(exp(-hd / 4.5) * (1.0 - self.ig) * step(0.001, self.ip), 0.0, 1.0))
+                                // 睁眼：从地平线向上下张开，边缘一道金色
+                                let open = self.ic * (sz.y + 60.0)
+                                let lid = smoothstep(open - 30.0, open, ld)
+                                let rim = exp(-abs(ld - open) / 7.0) * step(0.001, self.ic) * (1.0 - self.ic)
+                                col = col.mix(#xffc65c, clamp(rim, 0.0, 1.0))
+                                let keep = (1.0 - smoothstep(0.5, 1.5, ld)) * (1.0 - self.ic)
+                                let a = clamp(max(max(lid, rim), keep), 0.0, 1.0)
+                                return vec4(col.x * a, col.y * a, col.z * a, a)
+                            }
+                        }
+                        draw_bg.ip: cg_p
+                        draw_bg.ig: cg_g
+                        draw_bg.ic: cg_c
+                        draw_bg.ia: cg_a
+                        draw_bg.ihy: cg_hy()
+                    }
+                    View{width: Fill height: Fill flow: Down padding: Inset{left: 24 right: 24 top: 0 bottom: 28}
+                        View{width: Fill height: cg_hy() + 14.0 flow: Down spacing: 6 padding: Inset{top: 40}
+                            View{width: Fill height: Fit flow: Right align: Align{y: 1.0} spacing: 10
+                                Label{text: "晨报卡" draw_text.color: vec4(0.024 + 0.901 * (cg_txt * cg_a), 0.031 + 0.902 * (cg_txt * cg_a), 0.11 + 0.886 * (cg_txt * cg_a), 1.0) draw_text.text_style: theme.font_bold{font_size: 15}}
+                                Label{width: Fill text: "MORNING BRIEF" draw_text.color: vec4(0.024 + 0.586 * (cg_txt * cg_a), 0.031 + 0.599 * (cg_txt * cg_a), 0.11 + 0.680 * (cg_txt * cg_a), 1.0) draw_text.text_style: theme.font_code{font_size: 10}}
+                                Label{text: sky_issue() draw_text.color: vec4(0.024 + 0.976 * (cg_txt * cg_a), 0.031 + 0.745 * (cg_txt * cg_a), 0.11 + 0.250 * (cg_txt * cg_a), 1.0) draw_text.text_style: theme.font_code{font_size: 10}}
+                            }
+                            Label{text: sky_date() draw_text.color: vec4(0.024 + 0.586 * (cg_txt * cg_a * 0.8), 0.031 + 0.599 * (cg_txt * cg_a * 0.8), 0.11 + 0.680 * (cg_txt * cg_a * 0.8), 1.0) draw_text.text_style: theme.font_code{font_size: 10}}
+                        }
+                        View{width: Fill height: Fit flow: Right align: Align{y: 1.0} spacing: 4
+                            Label{text: cg_pct() draw_text.color: vec4(0.033 + 0.892 * (cg_txt * cg_a), 0.042 + 0.891 * (cg_txt * cg_a), 0.13 + 0.866 * (cg_txt * cg_a), 1.0) draw_text.text_style: theme.font_code{font_size: 76}}
+                            View{width: Fit height: Fit padding: Inset{bottom: 16}
+                                Label{text: "%" draw_text.color: vec4(0.033 + 0.967 * (cg_txt * cg_a), 0.042 + 0.436 * (cg_txt * cg_a), 0.13 + 0.410 * (cg_txt * cg_a), 1.0) draw_text.text_style: theme.font_code{font_size: 18}}
+                            }
+                        }
+                        Label{width: Fill text: cg_hint() draw_text.color: vec4(0.033 + 0.757 * (cg_txt * cg_a * 0.9), 0.042 + 0.758 * (cg_txt * cg_a * 0.9), 0.13 + 0.810 * (cg_txt * cg_a * 0.9), 1.0) draw_text.text_style.font_size: 13}
+                        View{width: Fill height: Fill}
+                        View{width: Fill height: Fit flow: Right align: Align{y: 0.5}
+                            Label{width: Fill text: "你的 AI 编辑部，正在为今天开印" draw_text.color: vec4(0.066 + 0.354 * (cg_txt * cg_a), 0.08 + 0.370 * (cg_txt * cg_a), 0.24 + 0.410 * (cg_txt * cg_a), 1.0) draw_text.text_style.font_size: 10}
+                            Label{text: "轻点跳过 ›" draw_text.color: vec4(0.066 + 0.544 * (cg_txt * cg_a), 0.08 + 0.550 * (cg_txt * cg_a), 0.24 + 0.550 * (cg_txt * cg_a), 1.0) draw_text.text_style.font_size: 11}
+                        }
+                    }
                 }
             }
-            View{width: Fill height: Fill flow: Down align: Align{x: 0.5 y: 0.5} spacing: 10
-                cg_eye := Label{width: Fill align: Align{x: 0.5} text: "" draw_text.color: #xffd39a draw_text.text_style.font_size: 11}
-                cg_ttl := Label{width: Fill align: Align{x: 0.5} text: "" draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 30}}
-                cg_rul := Label{width: Fill align: Align{x: 0.5} text: "" draw_text.color: #xe0245e draw_text.text_style.font_size: 12}
-            }
+            GestureView{width: Fill height: Fill on_tap: |x, y| cg_off()}
         }
-
     }
-    tile: View{width: Fill height: Fill flow: Down padding: Inset{left: 14 right: 14 top: 12 bottom: 12} spacing: 6
-        new_batch: true show_bg: true draw_bg.color: #xffffff
-        Label{text: "晨报卡" draw_text.color: accent draw_text.text_style: theme.font_bold{font_size: 13}}
-        Label{width: Fill text: "一句话意图，生成一份可核验的晨报。" max_lines: 3 draw_text.color: ink draw_text.text_style.font_size: 12}
+    tile: RoundedView{width: Fill height: Fill flow: Down padding: Inset{left: 14 right: 14 top: 12 bottom: 12} spacing: 6
+        new_batch: true show_bg: true draw_bg.color: ground draw_bg.border_radius: 0.0
+        View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8
+            Label{width: Fill text: "晨报卡" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
+            Label{text: sky_issue() draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 10}}
+        }
+        Label{width: Fill text: "一句话说出想读什么，日出前编好一份可核验的晨报。" max_lines: 3 draw_text.color: soft draw_text.text_style.font_size: 12}
     }
 }
