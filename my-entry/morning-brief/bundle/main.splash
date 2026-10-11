@@ -45,17 +45,46 @@ fn charter_text(){
     out
 }
 
+// ---- 数据来源：一份晨报不是只有一个信箱 ----
+// 每条来源带一个 plat（平台）id，用户在首页可以自由勾选想要哪几个平台；
+// 只勾到的才会去取数。kind 决定解析方式：
+//   "hn"     → HN Algolia JSON
+//   "gh"     → GitHub 搜索 JSON
+//   "digest" → TechMeme 式（标题尾带 (Outlet)）
+//   "rss"    → 任何普通 RSS / Atom（少数派、InfoQ、IT之家…）
+// 域名必须与 manifest.json 的 network.hosts 完全一致，否则运行时会被拒。
 let sources = [
-    {id: "hn" label: "Hacker News" host: "hn.algolia.com" note: "首页热榜 30 条" kind: "hn" url: "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30"}
-    {id: "techmeme" label: "TechMeme" host: "www.techmeme.com" note: "最新条目" kind: "digest" url: "https://www.techmeme.com/feed.xml"}
+    {id: "hn"       plat: "hn"       label: "Hacker News"  host: "hn.algolia.com"   note: "首页热榜 30 条" kind: "hn"     url: "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30"}
+    {id: "techmeme" plat: "techmeme" label: "TechMeme"     host: "www.techmeme.com" note: "最新条目"      kind: "digest" url: "https://www.techmeme.com/feed.xml"}
+    {id: "github"   plat: "github"   label: "GitHub 趋势"  host: "api.github.com"   note: "近一个月新星仓库" kind: "gh"   url: "https://api.github.com/search/repositories?q=created:%3E2026-09-10&sort=stars&order=desc&per_page=25"}
+    {id: "arxiv"    plat: "arxiv"    label: "arXiv 论文"   host: "export.arxiv.org" note: "最新 AI 论文"   kind: "rss"    url: "https://export.arxiv.org/api/query?search_query=cat:cs.AI&max_results=25&sortBy=submittedDate&sortOrder=descending"}
+    {id: "sspai"    plat: "sspai"    label: "少数派"       host: "sspai.com"        note: "最新文章"      kind: "rss"    url: "https://sspai.com/feed"}
+    {id: "infoq"    plat: "infoq"    label: "InfoQ 中文"   host: "www.infoq.cn"     note: "最新文章"      kind: "rss"    url: "https://www.infoq.cn/feed"}
+    {id: "ithome"   plat: "ithome"   label: "IT之家"       host: "www.ithome.com"   note: "最新资讯"      kind: "rss"    url: "https://www.ithome.com/rss/"}
 ]
+// 平台元数据：首页按这个列表画勾选条，取数时按勾选过滤。
+let plats = [
+    {id: "hn"       label: "Hacker News" group: "海外"}
+    {id: "techmeme" label: "TechMeme"    group: "海外"}
+    {id: "github"   label: "GitHub"      group: "海外"}
+    {id: "arxiv"    label: "arXiv"       group: "海外"}
+    {id: "sspai"    label: "少数派"       group: "国内"}
+    {id: "infoq"    label: "InfoQ 中文"   group: "国内"}
+    {id: "ithome"   label: "IT之家"       group: "国内"}
+]
+// ---- 信息品类：不再只有科技 ----
+// en/zh 两条正则命中任一即算命中；品类与平台互相独立，可以只要「生活 × 少数派」。
 let topics = [
-    {id: "ai" label: "AI" en: "(\\W|^)(AI|GPT|LLM|OpenAI|Anthropic|DeepMind|Gemini|Claude)(\\W|$)" zh: "人工智能|大模型|机器学习"}
-    {id: "oss" label: "开源" en: "(\\W|^)(open source|opensource|Linux|kernel|GitHub|Apache)(\\W|$)" zh: "开源"}
-    {id: "sec" label: "安全" en: "(\\W|^)(security|vulnerability|breach|malware|ransomware|exploit|CVE)(\\W|$)" zh: "安全|漏洞"}
-    {id: "chip" label: "芯片" en: "(\\W|^)(chip|chips|semiconductor|GPU|silicon|TSMC|Nvidia|wafer)(\\W|$)" zh: "芯片|半导体"}
+    {id: "ai"    label: "AI"   en: "(\\W|^)(AI|GPT|LLM|OpenAI|Anthropic|DeepMind|Gemini|Claude)(\\W|$)" zh: "人工智能|大模型|机器学习"}
+    {id: "oss"   label: "开源" en: "(\\W|^)(open source|opensource|Linux|kernel|GitHub|Apache)(\\W|$)" zh: "开源"}
+    {id: "sec"   label: "安全" en: "(\\W|^)(security|vulnerability|breach|malware|ransomware|exploit|CVE)(\\W|$)" zh: "安全|漏洞"}
+    {id: "chip"  label: "芯片" en: "(\\W|^)(chip|chips|semiconductor|GPU|silicon|TSMC|Nvidia|wafer)(\\W|$)" zh: "芯片|半导体"}
+    {id: "life"  label: "生活" en: "(\\W|^)(health|food|travel|home|family|fitness|recipe|gadget)(\\W|$)" zh: "生活|健康|美食|旅行|家居|健身|养生|数码"}
+    {id: "biz"   label: "财经" en: "(\\W|^)(market|stock|economy|funding|IPO|revenue|acquisition|earnings)(\\W|$)" zh: "经济|财经|股价|融资|上市|营收|收购|财报"}
+    {id: "sci"   label: "科学" en: "(\\W|^)(study|research|science|physics|biology|space|NASA|climate)(\\W|$)" zh: "科学|研究|物理|生物|太空|航天|气候"}
 ]
-let chosen = {ai: true oss: true sec: false chip: false}
+let chosen = {ai: true oss: true sec: false chip: false life: false biz: false sci: false}
+let chosen_plat = {hn: true techmeme: true github: true arxiv: false sspai: true infoq: false ithome: false}
 let limit = 10
 let pool = 16
 let phase = "intent"
@@ -637,6 +666,32 @@ fn hn_rows(body){
     out
 }
 
+fn gh_rows(body){
+    // GitHub 搜索 API 的 JSON：仓库全名 + 一句话简介当标题，星数当热度。
+    // 缺字段一律「先取键再判空」，跟 hn_rows 一个读法，避免整轮取数卡死。
+    let out = []
+    let data = body.parse_json()
+    if data == nil || data.items == nil { return out }
+    for it in data.items {
+        let title = it["full_name"]
+        if title == nil { continue }
+        title = "" + title
+        if title == "" { continue }
+        let desc = it["description"]
+        if desc != nil && desc != "" { title = title + " — " + ("" + desc) }
+        let link = ""
+        let hu = it["html_url"]
+        if hu != nil { link = "" + hu }
+        if link == "" { continue }
+        let sid = ""
+        let ii = it["id"]
+        if ii != nil { sid = "" + ii }
+        out.push({id: "gh-" + sid title: title link: link source: "GitHub" published: 0
+            summary: "" image: "" discussion: "" points: it["stargazers_count"] comments: nil})
+    }
+    out
+}
+
 fn feed_rows(body, s){
     let items = body.parse_feed(s.kind)
     if items == nil { return nil }
@@ -680,7 +735,9 @@ fn load_source(s){
             return
         }
         let body = res.body.to_string()
-        if s.kind == "hn" { rows = hn_rows(body) } else { rows = feed_rows(body, s) }
+        if s.kind == "hn" { rows = hn_rows(body) }
+        else if s.kind == "gh" { rows = gh_rows(body) }
+        else { rows = feed_rows(body, s) }
     } catch err {
         failed.push(s.label)
         return
@@ -699,10 +756,55 @@ fn topic_hit(t, title){
 }
 
 fn topic_on(id){
-    if id == "ai" { return chosen["ai"] }
-    if id == "oss" { return chosen["oss"] }
-    if id == "sec" { return chosen["sec"] }
-    chosen["chip"]
+    // 品类表以后还会加，别再把 id 硬编码成一串 if。
+    let v = chosen[id]
+    if v == nil { return false }
+    v
+}
+
+fn plat_on(id){
+    let v = chosen_plat[id]
+    if v == nil { return false }
+    v
+}
+
+fn plat_label(id){
+    for p in plats { if p.id == id { return p.label } }
+    id
+}
+
+fn plat_line(){
+    let out = ""
+    let n = 0
+    for p in plats {
+        if plat_on(p.id) {
+            if out != "" { out = out + "、" }
+            out = out + p.label
+            n = n + 1
+        }
+    }
+    if n == 0 { return "未选平台（一个都不取）" }
+    out
+}
+
+fn plat_note_line(){
+    // 计划页要如实说出「这次会去哪儿取数」，勾了几个就说几个。
+    let out = ""
+    for s in sources {
+        if plat_on(s.plat) {
+            out = out + "  · " + s.label + " — " + s.note + "\n"
+        }
+    }
+    if out == "" { return "（没有勾选任何平台）\n" }
+    out
+}
+
+fn src_n(){
+    // 「全部失败」的判断要用「这次实际取了几家」，不是来源总数——
+    // 否则用户只勾 2 家、这 2 家都挂了，界面会说「部分失败」。
+    let n = 0
+    for s in sources { if plat_on(s.plat) { n = n + 1 } }
+    n
 }
 
 fn row_hit(title){
@@ -850,7 +952,7 @@ fn hosts_line(){
 }
 
 fn sources_line(){
-    if ok_sources.len() == 0 { return "无" }
+    if ok_src_n() == 0 { return "无" }
     let out = ""
     for s in ok_sources {
         if out != "" { out = out + " · " }
@@ -915,7 +1017,7 @@ fn panel_ok_count(){
 
 fn plan_text(){
     let out = "操作计划\n"
-    for s in sources { out = out + "  · " + s.label + " — " + s.note + "\n" }
+    out = out + plat_note_line()
     out + "候选范围：按发布时间取最近 " + pool + " 条\n" + "判断方式：" + plan_way() + "\n" + "排序：由 AI 主编按重要性排序（离线时按发布时间）"
 }
 
@@ -930,11 +1032,11 @@ fn ask_text(){
 }
 
 fn status_line(){
-    if phase == "fetching" { return "正在获取 " + sources.len() + " 个来源…" }
+    if phase == "fetching" { return "正在获取 " + src_n() + " 个来源…" }
     if phase == "judging" { return "AI 主编正在判断…" }
     if phase == "done" {
         if failed.len() == 0 { return "已完成。" }
-        if failed.len() < sources.len() { return "部分完成。" }
+        if failed.len() < src_n() { return "部分完成。" }
         return "未能获取任何来源。"
     }
     ""
@@ -947,14 +1049,14 @@ fn fail_line(){
         if out != "失败来源：" { out = out + "、" }
         out = out + f
     }
-    if failed.len() == sources.len() { return out + "（全部失败）" }
+    if failed.len() == src_n() { return out + "（全部失败）" }
     out + "（其余来源结果如下，条数未补齐）"
 }
 
 fn empty_line(){
     if phase == "fetching" { return "正在获取…" }
     if phase == "judging" { return "AI 主编正在判断…" }
-    if failed.len() == sources.len() { return "无法获取任何来源。" }
+    if failed.len() == src_n() { return "无法获取任何来源。" }
     if ai_on && picked.len() == 0 { return "AI 主编认为今天没有值得进入晨报的条目 — 这是判断结果，不是获取失败。" }
     "未找到符合「" + topics_line() + "」的条目 — 这是筛选结果，不是获取失败。"
 }
@@ -962,13 +1064,13 @@ fn empty_line(){
 fn stale_line(){
     if picked.len() > 0 { return "" }
     if last_rows.len() == 0 { return "" }
-    if failed.len() == sources.len() { return "这次没能取到任何来源，下面是上次成功取到的晨报" }
+    if failed.len() == src_n() { return "这次没能取到任何来源，下面是上次成功取到的晨报" }
     "下面是上次生成的晨报，想换新的就回到首屏重新生成"
 }
 
 fn show_rows(){
     if picked.len() > 0 { return picked }
-    if failed.len() == sources.len() && last_rows.len() > 0 { return last_rows }
+    if failed.len() == src_n() && last_rows.len() > 0 { return last_rows }
     if phase == "done" && last_rows.len() > 0 { return last_rows }
     []
 }
@@ -2508,7 +2610,8 @@ fn ag_context(){
 // L3 工具层 · 主编能对这个程序做的事（唯一入口；界面上的按钮都在这一层有对应）
 // =====================================================================
 let ag_tools = [
-    {id: "set_topics" hint: "换主题" desc: "设置主题过滤，只让列出的主题通过。args: {topics: 字符串数组，元素只取 ai/oss/sec/chip；空数组表示全部放行}"}
+    {id: "set_topics" hint: "换品类" desc: "设置信息品类过滤，只让列出的品类通过。args: {topics: 字符串数组，元素只取 ai/oss/sec/chip/life/biz/sci；空数组表示全部放行}"}
+    {id: "set_platforms" hint: "换平台" desc: "设置只去哪几个平台取数。args: {platforms: 字符串数组，元素只取 hn/techmeme/github/arxiv/sspai/infoq/ithome；空数组表示一个都不取}"}
     {id: "set_limit" hint: "改条数" desc: "改这一期的条数上限。args: {n: 3 到 30 的整数}"}
     {id: "set_intent" hint: "写关注点" desc: "写下一句话，作为这一期的关注点（用户的一句话意图）。args: {text: 一句话}"}
     {id: "make_plan" hint: "生成计划" desc: "按当前设置写出取数计划，界面进入待批准页（不联网）。用户说「生成/来一份/看今天的」时的第一步。args: {}"}
@@ -2579,13 +2682,20 @@ fn ag_row_at(i){
 }
 
 fn ag_apply_topics(list){
-    chosen["ai"] = false
-    chosen["oss"] = false
-    chosen["sec"] = false
-    chosen["chip"] = false
+    // 品类表不再固定四个，这里改成「先全关、再按名字打开」，加品类不用改这里。
+    for t in topics { chosen[t.id] = false }
     for t in list {
         let s = "" + t
-        if s == "ai" || s == "oss" || s == "sec" || s == "chip" { chosen[s] = true }
+        if chosen[s] != nil { chosen[s] = true }
+    }
+}
+
+fn ag_apply_plats(list){
+    // 平台同理。用户可以对主编说「只看 GitHub 和少数派」，就走到这里。
+    for p in plats { chosen_plat[p.id] = false }
+    for t in list {
+        let s = "" + t
+        if chosen_plat[s] != nil { chosen_plat[s] = true }
     }
 }
 
@@ -2609,7 +2719,15 @@ fn ag_do(tool, args){
         if vs != nil { for t in vs { list.push("" + t) } }
         ag_apply_topics(list)
         sync_ui()
-        return "主题已切换为：" + topics_line()
+        return "品类已切换为：" + topics_line()
+    }
+    if tool == "set_platforms" {
+        let list = []
+        let vs = ag_arg(args, "platforms")
+        if vs != nil { for t in vs { list.push("" + t) } }
+        ag_apply_plats(list)
+        sync_ui()
+        return "取数平台已切换为：" + plat_line()
     }
     if tool == "set_limit" {
         let n = ag_num(ag_arg(args, "n"), limit)
@@ -2760,7 +2878,7 @@ let ag_shape = {type: "object" required: ["say" "tool"] properties: {say: {type:
 fn ag_system(){
     "你是《晨报卡》的常驻 AI 主编，是这个小程序里唯一的操作者：用户用对话让你做界面上的一切事，你也可以直接回答新闻问题。" +
     "\n\n你能调用的工具（只能从这个清单里选，不能自己发明）：\n" + ag_tool_lines() +
-    "\n\n输出规则：每一轮只输出一个 JSON 对象。say 是给用户看的一句话（中文、口语、不超过 60 字）；tool 是要调用的工具名，不需要工具时填空字符串；args 是工具参数对象，没有参数就写空对象。多步任务一步一个工具，拿到结果再决定下一步，最多六步。同一个工具不要连着调用两次。用户说「生成今天的晨报」这类请求，就是两步：先 set_topics（如果他指定了主题），再 make_plan；到计划页就停手，请他说「批准」（或点界面按钮），绝不要自己调用 approve。事情办完立刻用 say 收尾一句。" +
+    "\n\n输出规则：每一轮只输出一个 JSON 对象。say 是给用户看的一句话（中文、口语、不超过 60 字）；tool 是要调用的工具名，不需要工具时填空字符串；args 是工具参数对象，没有参数就写空对象。多步任务一步一个工具，拿到结果再决定下一步，最多六步。同一个工具不要连着调用两次。用户说「生成今天的晨报」这类请求，就是两步：先 set_platforms／set_topics（如果他指定了平台或品类），再 make_plan；到计划页就停手，请他说「批准」（或点界面按钮），绝不要自己调用 approve。事情办完立刻用 say 收尾一句。" +
     "approve 会真的联网取数：只有用户明确说要生成、批准、开始时才调用它；用户只是问问题、看东西，就直接用 say 回答，不要调用工具。" +
     "你有几样别人没有的东西，该用就用：① search_archive 查本报自己的往期报道，用户问「我们之前报过什么」「这条之前有没有提过」时用它；② remember_reader 在用户明确要你记住一条偏好时用它，那是他亲口说的长期偏好；③ speak 在用户明确要你念出来时把话变成声音；④ read_brief 分段念整期，读者中途插话会停下、断点保留，他说「接着念」你就用 read_brief 重开一次（会从头念，所以只在他想重听时才用）；⑤ draft_interview 在有读者正在读的新闻、且他明确要你写封信追问时用它 —— 你只写稿存本机，发信是他在外部的动作，你永远不替他发。" +
     "关于信源：你在出报前会拿到每条候选的信源等级（一手 / 二手 / 传闻 / 转载）。读者问「这条靠谱吗」「消息来源怎么样」时，照实说等级，不要替他下结论。" +
@@ -3316,7 +3434,7 @@ fn gather(){
     all_rows = []
     ok_sources = []
     failed = []
-    for s in sources { load_source(s) }
+    for s in sources { if plat_on(s.plat) { load_source(s) } }
     let sorted = sort_desc(all_rows)
     cand = []
     let n = 0
@@ -3338,7 +3456,7 @@ fn gather(){
 fn refuse_check(){
     refuse_on = false
     refuse_why = ""
-    if ok_sources.len() == 0 { return false }
+    if ok_src_n() == 0 { return false }
     if cand.len() == 0 { return false }
     if tier_mix["first"] > 0 { return false }
     if tier_mix["second"] > 2 { return false }
@@ -3674,7 +3792,7 @@ fn fetch_watch(){
     if fetch_tick < 45 { start_timeout(1.0, || fetch_watch()) return }
     if phase == "fetching" {
         busy = false
-        if ok_sources.len() == 0 {
+        if ok_src_n() == 0 {
             for s in sources { if !already2(failed, s.label) { failed.push(s.label) } }
         }
         phase = "done"
@@ -3727,7 +3845,7 @@ fn finish(){
         th_scan(picked)
         // 往期档案：这一期进了本报记忆，以后可以「追一条线索」
         arc_add(picked)
-    } else if failed.len() < sources.len() {
+    } else if failed.len() < src_n() {
         fs.write("last_brief.json", {ts: finished_at rows: []}.to_json())
         last_rows = []
         last_at = finished_at
@@ -3908,10 +4026,13 @@ fn set_ask(t){
 }
 
 fn toggle_topic(id){
-    if id == "ai" { if chosen["ai"] { chosen["ai"] = false } else { chosen["ai"] = true } }
-    else if id == "oss" { if chosen["oss"] { chosen["oss"] = false } else { chosen["oss"] = true } }
-    else if id == "sec" { if chosen["sec"] { chosen["sec"] = false } else { chosen["sec"] = true } }
-    else { if chosen["chip"] { chosen["chip"] = false } else { chosen["chip"] = true } }
+    // 品类表可扩，别再写成一串 if/else。
+    if chosen[id] == true { chosen[id] = false } else { chosen[id] = true }
+    sync_ui()
+}
+
+fn toggle_plat(id){
+    if chosen_plat[id] == true { chosen_plat[id] = false } else { chosen_plat[id] = true }
     sync_ui()
 }
 
@@ -4042,6 +4163,26 @@ fn sync_ui(){
     ui.chip_sec_off.set_visible(!chosen["sec"])
     ui.chip_chip_on.set_visible(chosen["chip"])
     ui.chip_chip_off.set_visible(!chosen["chip"])
+    ui.chip_life_on.set_visible(chosen["life"])
+    ui.chip_life_off.set_visible(!chosen["life"])
+    ui.chip_biz_on.set_visible(chosen["biz"])
+    ui.chip_biz_off.set_visible(!chosen["biz"])
+    ui.chip_sci_on.set_visible(chosen["sci"])
+    ui.chip_sci_off.set_visible(!chosen["sci"])
+    ui.pk_hn_on.set_visible(chosen_plat["hn"])
+    ui.pk_hn_off.set_visible(!chosen_plat["hn"])
+    ui.pk_techmeme_on.set_visible(chosen_plat["techmeme"])
+    ui.pk_techmeme_off.set_visible(!chosen_plat["techmeme"])
+    ui.pk_github_on.set_visible(chosen_plat["github"])
+    ui.pk_github_off.set_visible(!chosen_plat["github"])
+    ui.pk_arxiv_on.set_visible(chosen_plat["arxiv"])
+    ui.pk_arxiv_off.set_visible(!chosen_plat["arxiv"])
+    ui.pk_sspai_on.set_visible(chosen_plat["sspai"])
+    ui.pk_sspai_off.set_visible(!chosen_plat["sspai"])
+    ui.pk_infoq_on.set_visible(chosen_plat["infoq"])
+    ui.pk_infoq_off.set_visible(!chosen_plat["infoq"])
+    ui.pk_ithome_on.set_visible(chosen_plat["ithome"])
+    ui.pk_ithome_off.set_visible(!chosen_plat["ithome"])
     ui.limit_label.set_text("" + limit)
     ui.browse.set_visible(phase == "intent" || phase == "asking" || phase == "plan" || phase == "judging" || phase == "denied")
     ui.gen_pane.set_visible(phase == "intent")
@@ -4157,8 +4298,8 @@ fn cg_off(){
 
 fn cg_text(){
     ui.cg_eye.set_text("M O R N I N G   B R I E F")
-    ui.cg_ttl.set_text("晨报卡")
-    ui.cg_rul.set_text("— 你的 AI 编辑部，随叫随到 —")
+    ui.cg_ttl.set_text("晨 报 卡")
+    ui.cg_rul.set_text("— 中英双语 · 你的 AI 编辑部，随叫随到 —")
 }
 
 fn boot(){
@@ -4457,7 +4598,7 @@ HostedView{width: Fill height: Fill
                 }
                 Label{width: Fill text: "晨报卡" draw_text.color: #xffffff draw_text.text_style: theme.font_bold{font_size: 30}}
                 RoundedView{width: 46 height: 2 new_batch: true draw_bg.color: gold draw_bg.border_radius: 1.0}
-                Label{width: Fill text: "MORNING BRIEF · AI 编辑部 · 常驻主编在线" draw_text.color: #xe8759b draw_text.text_style.font_size: 10}
+                Label{width: Fill text: "MORNING BRIEF · 晨报卡 · AI 编辑部 · 常驻主编在线" draw_text.color: #xe8759b draw_text.text_style.font_size: 10}
             }
             intent_line := Label{width: Fill text: "" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}}
             ask_in := TextInput{width: Fill height: 46 empty_text: "也可以直接写，例如：我想看芯片和 AI 的大新闻"
@@ -4467,7 +4608,8 @@ HostedView{width: Fill height: Fill
                     border_radius: 12.0}
                 draw_text +: {color: ink color_hover: ink color_focus: ink color_empty: secondary color_empty_hover: secondary}
             }
-            // ---- 主题开关：选中是实心墨色，未选是描边（两态各一个控件，靠可见性切换） ----
+            // ---- 信息品类：选中是实心墨色，未选是描边（两态各一个控件，靠可见性切换） ----
+            Label{width: Fill text: "信息品类" draw_text.color: secondary draw_text.text_style.font_size: 12}
             View{width: Fill height: Fit flow: Right spacing: 8
                 chip_ai_on := ChipOn{text: "AI" on_click: || toggle_topic("ai")}
                 chip_ai_off := ChipOff{text: "AI" on_click: || toggle_topic("ai")}
@@ -4477,6 +4619,35 @@ HostedView{width: Fill height: Fill
                 chip_sec_off := ChipOff{text: "安全" on_click: || toggle_topic("sec")}
                 chip_chip_on := ChipOn{text: "芯片" on_click: || toggle_topic("chip")}
                 chip_chip_off := ChipOff{text: "芯片" on_click: || toggle_topic("chip")}
+            }
+            View{width: Fill height: Fit flow: Right spacing: 8
+                chip_life_on := ChipOn{text: "生活" on_click: || toggle_topic("life")}
+                chip_life_off := ChipOff{text: "生活" on_click: || toggle_topic("life")}
+                chip_biz_on := ChipOn{text: "财经" on_click: || toggle_topic("biz")}
+                chip_biz_off := ChipOff{text: "财经" on_click: || toggle_topic("biz")}
+                chip_sci_on := ChipOn{text: "科学" on_click: || toggle_topic("sci")}
+                chip_sci_off := ChipOff{text: "科学" on_click: || toggle_topic("sci")}
+            }
+            // ---- 内容平台：想看哪几家就勾哪几家，没勾的平台一条都不会去取 ----
+            Label{width: Fill text: "内容平台 · 海外" draw_text.color: secondary draw_text.text_style.font_size: 12}
+            View{width: Fill height: Fit flow: Right spacing: 8
+                pk_hn_on := ChipOn{text: "HN" on_click: || toggle_plat("hn")}
+                pk_hn_off := ChipOff{text: "HN" on_click: || toggle_plat("hn")}
+                pk_techmeme_on := ChipOn{text: "TechMeme" on_click: || toggle_plat("techmeme")}
+                pk_techmeme_off := ChipOff{text: "TechMeme" on_click: || toggle_plat("techmeme")}
+                pk_github_on := ChipOn{text: "GitHub" on_click: || toggle_plat("github")}
+                pk_github_off := ChipOff{text: "GitHub" on_click: || toggle_plat("github")}
+                pk_arxiv_on := ChipOn{text: "arXiv" on_click: || toggle_plat("arxiv")}
+                pk_arxiv_off := ChipOff{text: "arXiv" on_click: || toggle_plat("arxiv")}
+            }
+            Label{width: Fill text: "内容平台 · 国内" draw_text.color: secondary draw_text.text_style.font_size: 12}
+            View{width: Fill height: Fit flow: Right spacing: 8
+                pk_sspai_on := ChipOn{text: "少数派" on_click: || toggle_plat("sspai")}
+                pk_sspai_off := ChipOff{text: "少数派" on_click: || toggle_plat("sspai")}
+                pk_infoq_on := ChipOn{text: "InfoQ" on_click: || toggle_plat("infoq")}
+                pk_infoq_off := ChipOff{text: "InfoQ" on_click: || toggle_plat("infoq")}
+                pk_ithome_on := ChipOn{text: "IT之家" on_click: || toggle_plat("ithome")}
+                pk_ithome_off := ChipOff{text: "IT之家" on_click: || toggle_plat("ithome")}
             }
             View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 12
                 Label{text: "本期条数" draw_text.color: secondary draw_text.text_style.font_size: 12}

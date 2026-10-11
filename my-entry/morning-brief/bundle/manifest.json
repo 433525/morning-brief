@@ -12,19 +12,24 @@
   },
   "id": "morning-brief",
   "integrity": {
-    "bundle_blake3": "651873f33b3fdf3ed96f2073223f74dfe38e05b7ed78799557339405925aed24"
+    "bundle_blake3": "abfdaed286ec467165e35a0132e99ffaf878510ce12bbb60cc58d48d8969482a"
   },
   "name": "Morning Brief",
   "network": {
     "hosts": [
       "hn.algolia.com",
       "www.techmeme.com",
-      "news.ycombinator.com"
+      "news.ycombinator.com",
+      "api.github.com",
+      "export.arxiv.org",
+      "sspai.com",
+      "www.infoq.cn",
+      "www.ithome.com"
     ]
   },
   "schema": 1,
   "storage": {
     "max_bytes": null
   },
-  "version": "0.2.0"
+  "version": "0.3.0"
 }
