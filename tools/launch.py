@@ -165,7 +165,10 @@ def main():
     env = dict(os.environ)
     env["OCTO_HUB"] = str(hub)
     env["OCTO_CARD_HOST"] = str(card_host)
-    env["OCTOSENSE_APP_HUB"] = str(REPO.parent / "OctoSense-App-Hub")
+    # NOTE: the App Hub checkout lives INSIDE this repo, not next to it.
+    # (REPO.parent / "OctoSense-App-Hub" pointed at a directory that does
+    #  not exist; harmless for `octo run` but wrong for kit/beauty flows.)
+    env["OCTOSENSE_APP_HUB"] = str(REPO / "OctoSense-App-Hub")
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
 

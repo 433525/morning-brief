@@ -16,3 +16,11 @@
 *.ttf binary
 *.otf binary
 *.blake3 binary
+
+# Windows 批处理必须 CRLF 检出。
+# 原因：cmd.exe 对 LF 结尾的 .bat/.cmd 解析不稳定 —— 实测会把 `rem` 注释行
+# 按奇怪的位置截断后当命令执行（报一堆「'rning' 不是内部或外部命令」），
+# 双击启动因此时好时坏。批处理不参与 bundle digest，所以给这两个扩展名
+# 单独开 CRLF 例外，其余文件仍是 LF。
+*.bat text eol=crlf
+*.cmd text eol=crlf
