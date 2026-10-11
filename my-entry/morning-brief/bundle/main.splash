@@ -61,7 +61,6 @@ let sources = [
     {id: "sspai"    plat: "sspai"    label: "少数派"       host: "sspai.com"        note: "最新文章"      kind: "rss"    url: "https://sspai.com/feed"}
     {id: "infoq"    plat: "infoq"    label: "InfoQ 中文"   host: "www.infoq.cn"     note: "最新文章"      kind: "rss"    url: "https://www.infoq.cn/feed"}
     {id: "ithome"   plat: "ithome"   label: "IT之家"       host: "www.ithome.com"   note: "最新资讯"      kind: "rss"    url: "https://www.ithome.com/rss/"}
-    // —— 视频 / 榜单平台（免密钥公开口）——
     {id: "bili"     plat: "bili"     label: "B站热门"      host: "api.bilibili.com" note: "综合热门榜"   kind: "bili"   url: "https://api.bilibili.com/x/web-interface/popular?ps=20&pn=1"}
     {id: "douyin"   plat: "douyin"   label: "抖音热榜"     host: "www.iesdouyin.com" note: "热搜榜"      kind: "dy"     url: "https://www.iesdouyin.com/web/api/v2/hotsearch/billboard/word/"}
     {id: "yt1"      plat: "youtube"  label: "YouTube · Fireship" host: "www.youtube.com" note: "最新视频" kind: "rss" url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsBjURrPoezykLs9EqgamOA"}
@@ -1016,7 +1015,7 @@ fn hosts_line(){
 }
 
 fn sources_line(){
-    if ok_src_n() == 0 { return "无" }
+    if ok_sources.len() == 0 { return "无" }
     let out = ""
     for s in ok_sources {
         if out != "" { out = out + " · " }
@@ -3520,7 +3519,7 @@ fn gather(){
 fn refuse_check(){
     refuse_on = false
     refuse_why = ""
-    if ok_src_n() == 0 { return false }
+    if ok_sources.len() == 0 { return false }
     if cand.len() == 0 { return false }
     if tier_mix["first"] > 0 { return false }
     if tier_mix["second"] > 2 { return false }
@@ -3856,7 +3855,7 @@ fn fetch_watch(){
     if fetch_tick < 45 { start_timeout(1.0, || fetch_watch()) return }
     if phase == "fetching" {
         busy = false
-        if ok_src_n() == 0 {
+        if ok_sources.len() == 0 {
             for s in sources { if !already2(failed, s.label) { failed.push(s.label) } }
         }
         phase = "done"
@@ -5169,58 +5168,149 @@ HostedView{width: Fill height: Fill
                 arc_pill := Label{width: Fill height: Fit text: "" max_lines: 2 draw_text.color: #x9b968c draw_text.text_style.font_size: 9}
                 View{width: 8 height: 1}
                 // 主编的形象：纯 shader 画出来的小家伙，会呼吸、会眨眼、头顶有晨光
-                pet := View{width: 46 height: 46 show_bg: true
+                // 主编的形象 · 咕嘎企鹅（纯 shader 手绘：形体由距离场给出，立体感由法线光照算出）
+                //   不加载任何模型、图片或字体，与开场 CG 用同一套距离场手法。
+                pet := View{width: 56 height: 56 show_bg: true
                     new_batch: true
                     draw_bg +: {
                         pixel: fn() {
-                            let ptT = self.draw_pass.time
-                            let ptSz = self.rect_size
-                            let ptP = self.pos * ptSz
-                            let ptCx = ptSz.x * 0.5
-                            let ptCy = ptSz.y * 0.54
-                            let ptBase = ptSz.x * 0.5
-                            let ptGoldA = #xffcf7a
-                            let ptGoldB = #xfff2d8
-                            let ptPink = #xd61f52
-                            let ptEye = #x1b1016
-
-                            let ptBr = 1.0 + 0.05 * sin(ptT * 2.0)
-                            let ptR = ptBase * 0.58 * ptBr
-
-                            let ptQx = (ptP.x - ptCx) / (ptR * 1.02)
-                            let ptQy = (ptP.y - ptCy) / ptR
-                            let ptBody = 1.0 - smoothstep(0.90 1.0 length(vec2(ptQx, ptQy)))
-
-                            let ptRel = clamp((ptP.y - (ptCy - ptR)) / (2.0 * ptR) 0.0 1.0)
-                            let ptSkinA = ptGoldB.mix(ptGoldA, clamp(ptRel * 1.9 0.0 1.0))
-                            let ptSkin = ptSkinA.mix(ptPink, clamp((ptRel - 0.45) * 1.8 0.0 1.0) * 0.85)
-
-                            let ptBt = fract(ptT * 0.26)
-                            let ptShut = 1.0 - smoothstep(0.0 0.045 abs(ptBt - 0.5))
-                            let ptEh = ptR * 0.20 * (1.0 - ptShut)
-                            let ptEw = ptR * 0.155
-                            let ptEy = ptCy - ptR * 0.08
-                            let ptE1 = length(vec2((ptP.x - (ptCx - ptR * 0.34)) / ptEw, (ptP.y - ptEy) / (ptEh + 0.5)))
-                            let ptE2 = length(vec2((ptP.x - (ptCx + ptR * 0.34)) / ptEw, (ptP.y - ptEy) / (ptEh + 0.5)))
-                            let ptEye1 = 1.0 - smoothstep(0.78 1.02 ptE1)
-                            let ptEye2 = 1.0 - smoothstep(0.78 1.02 ptE2)
-
-                            let ptHd = length(vec2((ptP.x - ptCx) / ptR, (ptP.y - (ptCy - ptR * 1.34)) / (ptR * 0.34)))
-                            let ptRing = (1.0 - smoothstep(0.0 0.14 abs(ptHd - 1.0))) * 0.85
-
-                            let ptGd = length(ptP - vec2(ptCx, ptCy))
-                            let ptHalo = (1.0 - smoothstep(ptR * 0.92 ptBase * 0.99 ptGd)) * 0.30
-
-                            var ptCol = ptGoldA
-                            var ptA = ptHalo
-                            ptCol = ptCol.mix(ptSkin, ptBody)
-                            ptA = ptA + ptBody * (1.0 - ptA)
-                            ptCol = ptCol.mix(ptEye, ptEye1 * ptBody)
-                            ptCol = ptCol.mix(ptEye, ptEye2 * ptBody)
-                            ptCol = ptCol.mix(ptGoldB, ptRing * 0.9)
-                            ptA = ptA + ptRing * 0.55 * (1.0 - ptA)
-
-                            return vec4(ptCol.x * ptA, ptCol.y * ptA, ptCol.z * ptA, ptA)
+                            let pgT = self.draw_pass.time
+                            let pgSz = self.rect_size
+                            let pgP = self.pos * pgSz
+                            let pgS = min(pgSz.x, pgSz.y) * 0.5
+                            let pgBob = sin(pgT * 2.1) * 0.026
+                            let pgSway = sin(pgT * 0.62) * 0.022
+                            let pgUx = (pgP.x - pgSz.x * 0.5) / pgS - pgSway
+                            let pgUy = (pgP.y - pgSz.y * 0.5) / pgS - pgBob
+                            let pgLdir = normalize(vec3(-0.46, -0.70, 0.58))
+                            let pgHv = normalize(vec3(-0.26, -0.40, 1.55))
+                            let pgBt = fract(pgT * 0.278)
+                            let pgShut = 1.0 - smoothstep(0.0 0.055 abs(pgBt - 0.5))
+                            let pgEyeK = 1.0 - pgShut * 0.93
+                            var pgCol = #x101218
+                            var pgA = 0.0
+                            let pgq0 = vec2((pgUx - (-0.45)) / 0.12, (pgUy - (0.26)) / 0.24)
+                            let pgd0 = length(pgq0)
+                            let pgm0 = 1.0 - smoothstep(0.93 1.0 pgd0)
+                            let pgz0 = sqrt(max(0.0, 1.0 - pgd0 * pgd0))
+                            let pgn0 = normalize(vec3(pgq0.x, pgq0.y, pgz0))
+                            let pgl0 = 0.40 + 0.74 * max(0.0, dot(pgn0, pgLdir))
+                            let pgc0 = #x2b2f3a * pgl0 + #xffffff * pow(max(0.0, dot(pgn0, pgHv)), 16.0) * 0.2
+                            pgCol = pgCol.mix(pgc0, pgm0)
+                            pgA = max(pgA, pgm0)
+                            let pgq1 = vec2((pgUx - (0.45)) / 0.12, (pgUy - (0.26)) / 0.24)
+                            let pgd1 = length(pgq1)
+                            let pgm1 = 1.0 - smoothstep(0.93 1.0 pgd1)
+                            let pgz1 = sqrt(max(0.0, 1.0 - pgd1 * pgd1))
+                            let pgn1 = normalize(vec3(pgq1.x, pgq1.y, pgz1))
+                            let pgl1 = 0.40 + 0.74 * max(0.0, dot(pgn1, pgLdir))
+                            let pgc1 = #x2b2f3a * pgl1 + #xffffff * pow(max(0.0, dot(pgn1, pgHv)), 16.0) * 0.2
+                            pgCol = pgCol.mix(pgc1, pgm1)
+                            pgA = max(pgA, pgm1)
+                            let pgq2 = vec2((pgUx - (-0.19)) / 0.155, (pgUy - (0.82)) / 0.078)
+                            let pgd2 = length(pgq2)
+                            let pgm2 = 1.0 - smoothstep(0.93 1.0 pgd2)
+                            let pgz2 = sqrt(max(0.0, 1.0 - pgd2 * pgd2))
+                            let pgn2 = normalize(vec3(pgq2.x, pgq2.y, pgz2))
+                            let pgl2 = 0.40 + 0.74 * max(0.0, dot(pgn2, pgLdir))
+                            let pgc2 = #xf59a2e * pgl2 + #xffffff * pow(max(0.0, dot(pgn2, pgHv)), 26.0) * 0.42
+                            pgCol = pgCol.mix(pgc2, pgm2)
+                            pgA = max(pgA, pgm2)
+                            let pgq3 = vec2((pgUx - (0.19)) / 0.155, (pgUy - (0.82)) / 0.078)
+                            let pgd3 = length(pgq3)
+                            let pgm3 = 1.0 - smoothstep(0.93 1.0 pgd3)
+                            let pgz3 = sqrt(max(0.0, 1.0 - pgd3 * pgd3))
+                            let pgn3 = normalize(vec3(pgq3.x, pgq3.y, pgz3))
+                            let pgl3 = 0.40 + 0.74 * max(0.0, dot(pgn3, pgLdir))
+                            let pgc3 = #xf59a2e * pgl3 + #xffffff * pow(max(0.0, dot(pgn3, pgHv)), 26.0) * 0.42
+                            pgCol = pgCol.mix(pgc3, pgm3)
+                            pgA = max(pgA, pgm3)
+                            let pgq4 = vec2((pgUx - (0.0)) / 0.46, (pgUy - (0.3)) / 0.5)
+                            let pgd4 = length(pgq4)
+                            let pgm4 = 1.0 - smoothstep(0.93 1.0 pgd4)
+                            let pgz4 = sqrt(max(0.0, 1.0 - pgd4 * pgd4))
+                            let pgn4 = normalize(vec3(pgq4.x, pgq4.y, pgz4))
+                            let pgl4 = 0.40 + 0.74 * max(0.0, dot(pgn4, pgLdir))
+                            let pgc4 = #x2b2f3a * pgl4 + #xffffff * pow(max(0.0, dot(pgn4, pgHv)), 16.0) * 0.3
+                            pgCol = pgCol.mix(pgc4, pgm4)
+                            pgA = max(pgA, pgm4)
+                            let pgq5 = vec2((pgUx - (0.0)) / 0.3, (pgUy - (0.345)) / 0.36)
+                            let pgd5 = length(pgq5)
+                            let pgm5 = 1.0 - smoothstep(0.93 1.0 pgd5)
+                            let pgz5 = sqrt(max(0.0, 1.0 - pgd5 * pgd5))
+                            let pgn5 = normalize(vec3(pgq5.x, pgq5.y, pgz5))
+                            let pgl5 = 0.40 + 0.74 * max(0.0, dot(pgn5, pgLdir))
+                            let pgc5 = #xf5f5f7 * pgl5 + #xffffff * pow(max(0.0, dot(pgn5, pgHv)), 18.0) * 0.24
+                            pgCol = pgCol.mix(pgc5, pgm5)
+                            pgA = max(pgA, pgm5)
+                            let pgq6 = vec2((pgUx - (0.0)) / 0.44, (pgUy - (-0.42)) / 0.4)
+                            let pgd6 = length(pgq6)
+                            let pgm6 = 1.0 - smoothstep(0.93 1.0 pgd6)
+                            let pgz6 = sqrt(max(0.0, 1.0 - pgd6 * pgd6))
+                            let pgn6 = normalize(vec3(pgq6.x, pgq6.y, pgz6))
+                            let pgl6 = 0.40 + 0.74 * max(0.0, dot(pgn6, pgLdir))
+                            let pgc6 = #x2b2f3a * pgl6 + #xffffff * pow(max(0.0, dot(pgn6, pgHv)), 16.0) * 0.3
+                            pgCol = pgCol.mix(pgc6, pgm6)
+                            pgA = max(pgA, pgm6)
+                            let pgq7 = vec2((pgUx - (0.0)) / 0.32, (pgUy - (-0.36)) / 0.3)
+                            let pgd7 = length(pgq7)
+                            let pgm7 = 1.0 - smoothstep(0.93 1.0 pgd7)
+                            let pgz7 = sqrt(max(0.0, 1.0 - pgd7 * pgd7))
+                            let pgn7 = normalize(vec3(pgq7.x, pgq7.y, pgz7))
+                            let pgl7 = 0.40 + 0.74 * max(0.0, dot(pgn7, pgLdir))
+                            let pgc7 = #xf5f5f7 * pgl7 + #xffffff * pow(max(0.0, dot(pgn7, pgHv)), 18.0) * 0.24
+                            pgCol = pgCol.mix(pgc7, pgm7)
+                            pgA = max(pgA, pgm7)
+                            let pgq8 = vec2((pgUx - (0.0)) / 0.11, (pgUy - (-0.295)) / 0.078)
+                            let pgd8 = length(pgq8)
+                            let pgm8 = 1.0 - smoothstep(0.93 1.0 pgd8)
+                            let pgz8 = sqrt(max(0.0, 1.0 - pgd8 * pgd8))
+                            let pgn8 = normalize(vec3(pgq8.x, pgq8.y, pgz8))
+                            let pgl8 = 0.40 + 0.74 * max(0.0, dot(pgn8, pgLdir))
+                            let pgc8 = #xf59a2e * pgl8 + #xffffff * pow(max(0.0, dot(pgn8, pgHv)), 30.0) * 0.5
+                            pgCol = pgCol.mix(pgc8, pgm8)
+                            pgA = max(pgA, pgm8)
+                            let pgq9 = vec2((pgUx - (-0.165)) / 0.072, (pgUy - (-0.47)) / (0.088 * pgEyeK))
+                            let pgd9 = length(pgq9)
+                            let pgm9 = 1.0 - smoothstep(0.93 1.0 pgd9)
+                            let pgz9 = sqrt(max(0.0, 1.0 - pgd9 * pgd9))
+                            let pgn9 = normalize(vec3(pgq9.x, pgq9.y, pgz9))
+                            let pgl9 = 0.40 + 0.74 * max(0.0, dot(pgn9, pgLdir))
+                            let pgc9 = #x14161c * pgl9 + #xffffff * pow(max(0.0, dot(pgn9, pgHv)), 40.0) * 0.55
+                            pgCol = pgCol.mix(pgc9, pgm9)
+                            pgA = max(pgA, pgm9)
+                            let pgq10 = vec2((pgUx - (0.165)) / 0.072, (pgUy - (-0.47)) / (0.088 * pgEyeK))
+                            let pgd10 = length(pgq10)
+                            let pgm10 = 1.0 - smoothstep(0.93 1.0 pgd10)
+                            let pgz10 = sqrt(max(0.0, 1.0 - pgd10 * pgd10))
+                            let pgn10 = normalize(vec3(pgq10.x, pgq10.y, pgz10))
+                            let pgl10 = 0.40 + 0.74 * max(0.0, dot(pgn10, pgLdir))
+                            let pgc10 = #x14161c * pgl10 + #xffffff * pow(max(0.0, dot(pgn10, pgHv)), 40.0) * 0.55
+                            pgCol = pgCol.mix(pgc10, pgm10)
+                            pgA = max(pgA, pgm10)
+                            let pgq11 = vec2((pgUx - (-0.135)) / 0.026, (pgUy - (-0.512)) / (0.026 * pgEyeK))
+                            let pgd11 = length(pgq11)
+                            let pgm11 = 1.0 - smoothstep(0.93 1.0 pgd11)
+                            let pgz11 = sqrt(max(0.0, 1.0 - pgd11 * pgd11))
+                            let pgn11 = normalize(vec3(pgq11.x, pgq11.y, pgz11))
+                            let pgl11 = 0.40 + 0.74 * max(0.0, dot(pgn11, pgLdir))
+                            let pgc11 = #xffffff * pgl11
+                            pgCol = pgCol.mix(pgc11, pgm11)
+                            pgA = max(pgA, pgm11)
+                            let pgq12 = vec2((pgUx - (0.135)) / 0.026, (pgUy - (-0.512)) / (0.026 * pgEyeK))
+                            let pgd12 = length(pgq12)
+                            let pgm12 = 1.0 - smoothstep(0.93 1.0 pgd12)
+                            let pgz12 = sqrt(max(0.0, 1.0 - pgd12 * pgd12))
+                            let pgn12 = normalize(vec3(pgq12.x, pgq12.y, pgz12))
+                            let pgl12 = 0.40 + 0.74 * max(0.0, dot(pgn12, pgLdir))
+                            let pgc12 = #xffffff * pgl12
+                            pgCol = pgCol.mix(pgc12, pgm12)
+                            pgA = max(pgA, pgm12)
+                            let pghd = length(vec2(pgUx / 0.360, (pgUy + 0.920) / 0.105))
+                            let pgring = (1.0 - smoothstep(0.0 0.16 abs(pghd - 1.0))) * 0.88
+                            pgCol = pgCol.mix(#xffd39a, pgring)
+                            pgA = max(pgA, pgring)
+                            return vec4(pgCol.x * pgA, pgCol.y * pgA, pgCol.z * pgA, pgA)
                         }
                     }
                 }
@@ -5299,6 +5389,126 @@ HostedView{width: Fill height: Fill
                     let cgSl = (1.0 - smoothstep(0.0 2.5 abs(cgP.y - cgSlY))) * (1.0 - smoothstep(2.90 3.35 cgT))
                     cgCol = cgCol.mix(cgAcc, cgSl * 0.8)
 
+
+                    // ---- 咕嘎企鹅登场：随破晓光带一同从下方升起 ----
+                    let pgRise = smoothstep(1.55 2.75 cgT)
+                    let pgFade = smoothstep(1.55 2.35 cgT)
+                    let pgScale = min(cgSz.x, cgSz.y) * 0.30 * (0.86 + 0.14 * pgRise)
+                    let pgCy0 = cgCy + cgSz.y * (0.92 - 0.66 * pgRise)
+                    let pgUx = (cgP.x - cgCx) / pgScale
+                    let pgUy = (cgP.y - pgCy0) / pgScale
+                    let pgLdir = normalize(vec3(-0.46, -0.70, 0.58))
+                    let pgHv = normalize(vec3(-0.26, -0.40, 1.55))
+                    let pgBt = fract(cgT * 0.278)
+                    let pgShut = 1.0 - smoothstep(0.0 0.055 abs(pgBt - 0.5))
+                    let pgEyeK = 1.0 - pgShut * 0.93
+                    let pgq0 = vec2((pgUx - (-0.45)) / 0.12, (pgUy - (0.26)) / 0.24)
+                    let pgd0 = length(pgq0)
+                    let pgm0 = 1.0 - smoothstep(0.93 1.0 pgd0)
+                    let pgz0 = sqrt(max(0.0, 1.0 - pgd0 * pgd0))
+                    let pgn0 = normalize(vec3(pgq0.x, pgq0.y, pgz0))
+                    let pgl0 = 0.40 + 0.74 * max(0.0, dot(pgn0, pgLdir))
+                    let pgc0 = #x2b2f3a * pgl0 + #xffffff * pow(max(0.0, dot(pgn0, pgHv)), 16.0) * 0.2
+                    cgCol = cgCol.mix(pgc0, pgm0 * pgFade)
+                    let pgq1 = vec2((pgUx - (0.45)) / 0.12, (pgUy - (0.26)) / 0.24)
+                    let pgd1 = length(pgq1)
+                    let pgm1 = 1.0 - smoothstep(0.93 1.0 pgd1)
+                    let pgz1 = sqrt(max(0.0, 1.0 - pgd1 * pgd1))
+                    let pgn1 = normalize(vec3(pgq1.x, pgq1.y, pgz1))
+                    let pgl1 = 0.40 + 0.74 * max(0.0, dot(pgn1, pgLdir))
+                    let pgc1 = #x2b2f3a * pgl1 + #xffffff * pow(max(0.0, dot(pgn1, pgHv)), 16.0) * 0.2
+                    cgCol = cgCol.mix(pgc1, pgm1 * pgFade)
+                    let pgq2 = vec2((pgUx - (-0.19)) / 0.155, (pgUy - (0.82)) / 0.078)
+                    let pgd2 = length(pgq2)
+                    let pgm2 = 1.0 - smoothstep(0.93 1.0 pgd2)
+                    let pgz2 = sqrt(max(0.0, 1.0 - pgd2 * pgd2))
+                    let pgn2 = normalize(vec3(pgq2.x, pgq2.y, pgz2))
+                    let pgl2 = 0.40 + 0.74 * max(0.0, dot(pgn2, pgLdir))
+                    let pgc2 = #xf59a2e * pgl2 + #xffffff * pow(max(0.0, dot(pgn2, pgHv)), 26.0) * 0.42
+                    cgCol = cgCol.mix(pgc2, pgm2 * pgFade)
+                    let pgq3 = vec2((pgUx - (0.19)) / 0.155, (pgUy - (0.82)) / 0.078)
+                    let pgd3 = length(pgq3)
+                    let pgm3 = 1.0 - smoothstep(0.93 1.0 pgd3)
+                    let pgz3 = sqrt(max(0.0, 1.0 - pgd3 * pgd3))
+                    let pgn3 = normalize(vec3(pgq3.x, pgq3.y, pgz3))
+                    let pgl3 = 0.40 + 0.74 * max(0.0, dot(pgn3, pgLdir))
+                    let pgc3 = #xf59a2e * pgl3 + #xffffff * pow(max(0.0, dot(pgn3, pgHv)), 26.0) * 0.42
+                    cgCol = cgCol.mix(pgc3, pgm3 * pgFade)
+                    let pgq4 = vec2((pgUx - (0.0)) / 0.46, (pgUy - (0.3)) / 0.5)
+                    let pgd4 = length(pgq4)
+                    let pgm4 = 1.0 - smoothstep(0.93 1.0 pgd4)
+                    let pgz4 = sqrt(max(0.0, 1.0 - pgd4 * pgd4))
+                    let pgn4 = normalize(vec3(pgq4.x, pgq4.y, pgz4))
+                    let pgl4 = 0.40 + 0.74 * max(0.0, dot(pgn4, pgLdir))
+                    let pgc4 = #x2b2f3a * pgl4 + #xffffff * pow(max(0.0, dot(pgn4, pgHv)), 16.0) * 0.3
+                    cgCol = cgCol.mix(pgc4, pgm4 * pgFade)
+                    let pgq5 = vec2((pgUx - (0.0)) / 0.3, (pgUy - (0.345)) / 0.36)
+                    let pgd5 = length(pgq5)
+                    let pgm5 = 1.0 - smoothstep(0.93 1.0 pgd5)
+                    let pgz5 = sqrt(max(0.0, 1.0 - pgd5 * pgd5))
+                    let pgn5 = normalize(vec3(pgq5.x, pgq5.y, pgz5))
+                    let pgl5 = 0.40 + 0.74 * max(0.0, dot(pgn5, pgLdir))
+                    let pgc5 = #xf5f5f7 * pgl5 + #xffffff * pow(max(0.0, dot(pgn5, pgHv)), 18.0) * 0.24
+                    cgCol = cgCol.mix(pgc5, pgm5 * pgFade)
+                    let pgq6 = vec2((pgUx - (0.0)) / 0.44, (pgUy - (-0.42)) / 0.4)
+                    let pgd6 = length(pgq6)
+                    let pgm6 = 1.0 - smoothstep(0.93 1.0 pgd6)
+                    let pgz6 = sqrt(max(0.0, 1.0 - pgd6 * pgd6))
+                    let pgn6 = normalize(vec3(pgq6.x, pgq6.y, pgz6))
+                    let pgl6 = 0.40 + 0.74 * max(0.0, dot(pgn6, pgLdir))
+                    let pgc6 = #x2b2f3a * pgl6 + #xffffff * pow(max(0.0, dot(pgn6, pgHv)), 16.0) * 0.3
+                    cgCol = cgCol.mix(pgc6, pgm6 * pgFade)
+                    let pgq7 = vec2((pgUx - (0.0)) / 0.32, (pgUy - (-0.36)) / 0.3)
+                    let pgd7 = length(pgq7)
+                    let pgm7 = 1.0 - smoothstep(0.93 1.0 pgd7)
+                    let pgz7 = sqrt(max(0.0, 1.0 - pgd7 * pgd7))
+                    let pgn7 = normalize(vec3(pgq7.x, pgq7.y, pgz7))
+                    let pgl7 = 0.40 + 0.74 * max(0.0, dot(pgn7, pgLdir))
+                    let pgc7 = #xf5f5f7 * pgl7 + #xffffff * pow(max(0.0, dot(pgn7, pgHv)), 18.0) * 0.24
+                    cgCol = cgCol.mix(pgc7, pgm7 * pgFade)
+                    let pgq8 = vec2((pgUx - (0.0)) / 0.11, (pgUy - (-0.295)) / 0.078)
+                    let pgd8 = length(pgq8)
+                    let pgm8 = 1.0 - smoothstep(0.93 1.0 pgd8)
+                    let pgz8 = sqrt(max(0.0, 1.0 - pgd8 * pgd8))
+                    let pgn8 = normalize(vec3(pgq8.x, pgq8.y, pgz8))
+                    let pgl8 = 0.40 + 0.74 * max(0.0, dot(pgn8, pgLdir))
+                    let pgc8 = #xf59a2e * pgl8 + #xffffff * pow(max(0.0, dot(pgn8, pgHv)), 30.0) * 0.5
+                    cgCol = cgCol.mix(pgc8, pgm8 * pgFade)
+                    let pgq9 = vec2((pgUx - (-0.165)) / 0.072, (pgUy - (-0.47)) / (0.088 * pgEyeK))
+                    let pgd9 = length(pgq9)
+                    let pgm9 = 1.0 - smoothstep(0.93 1.0 pgd9)
+                    let pgz9 = sqrt(max(0.0, 1.0 - pgd9 * pgd9))
+                    let pgn9 = normalize(vec3(pgq9.x, pgq9.y, pgz9))
+                    let pgl9 = 0.40 + 0.74 * max(0.0, dot(pgn9, pgLdir))
+                    let pgc9 = #x14161c * pgl9 + #xffffff * pow(max(0.0, dot(pgn9, pgHv)), 40.0) * 0.55
+                    cgCol = cgCol.mix(pgc9, pgm9 * pgFade)
+                    let pgq10 = vec2((pgUx - (0.165)) / 0.072, (pgUy - (-0.47)) / (0.088 * pgEyeK))
+                    let pgd10 = length(pgq10)
+                    let pgm10 = 1.0 - smoothstep(0.93 1.0 pgd10)
+                    let pgz10 = sqrt(max(0.0, 1.0 - pgd10 * pgd10))
+                    let pgn10 = normalize(vec3(pgq10.x, pgq10.y, pgz10))
+                    let pgl10 = 0.40 + 0.74 * max(0.0, dot(pgn10, pgLdir))
+                    let pgc10 = #x14161c * pgl10 + #xffffff * pow(max(0.0, dot(pgn10, pgHv)), 40.0) * 0.55
+                    cgCol = cgCol.mix(pgc10, pgm10 * pgFade)
+                    let pgq11 = vec2((pgUx - (-0.135)) / 0.026, (pgUy - (-0.512)) / (0.026 * pgEyeK))
+                    let pgd11 = length(pgq11)
+                    let pgm11 = 1.0 - smoothstep(0.93 1.0 pgd11)
+                    let pgz11 = sqrt(max(0.0, 1.0 - pgd11 * pgd11))
+                    let pgn11 = normalize(vec3(pgq11.x, pgq11.y, pgz11))
+                    let pgl11 = 0.40 + 0.74 * max(0.0, dot(pgn11, pgLdir))
+                    let pgc11 = #xffffff * pgl11
+                    cgCol = cgCol.mix(pgc11, pgm11 * pgFade)
+                    let pgq12 = vec2((pgUx - (0.135)) / 0.026, (pgUy - (-0.512)) / (0.026 * pgEyeK))
+                    let pgd12 = length(pgq12)
+                    let pgm12 = 1.0 - smoothstep(0.93 1.0 pgd12)
+                    let pgz12 = sqrt(max(0.0, 1.0 - pgd12 * pgd12))
+                    let pgn12 = normalize(vec3(pgq12.x, pgq12.y, pgz12))
+                    let pgl12 = 0.40 + 0.74 * max(0.0, dot(pgn12, pgLdir))
+                    let pgc12 = #xffffff * pgl12
+                    cgCol = cgCol.mix(pgc12, pgm12 * pgFade)
+                    let pghd = length(vec2(pgUx / 0.360, (pgUy + 0.920) / 0.105))
+                    let pgring = (1.0 - smoothstep(0.0 0.16 abs(pghd - 1.0))) * 0.88
+                    cgCol = cgCol.mix(#xffd39a, pgring * pgFade)
                     let cgFlash = smoothstep(2.90 3.08 cgT)
                     cgCol = cgCol.mix(#xffffff, cgFlash * 0.94)
 
