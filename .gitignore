@@ -41,3 +41,6 @@ build/
 # uses them.」而 octo publish 生成的这个 workflow 恰好调用了 hub 里不存在的
 # publisher-prepare/attach/verify/pack 子命令（见 生态贡献/ISSUE-02）。
 .github/workflows/publish-app.yml
+# 本地编辑留的备份（每次大改前手抄一份，不进版本库）
+*.bak_*
+*.r38work

@@ -28,6 +28,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -40,6 +41,67 @@ CACHE_MAX = 240
 CACHE_TTL = 7 * 24 * 3600
 
 _voice = VOICE_DEFAULT
+
+
+def _has_deps():
+    """edge_tts + miniaudio 都在才算这个解释器能用。"""
+    try:
+        import edge_tts   # noqa: F401
+        import miniaudio  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _better_pythons():
+    """可能装了库的解释器，按可能性排序。"""
+    import shutil
+    yield sys.executable
+    la = os.environ.get("LOCALAPPDATA", "")
+    for ver in ("313", "312", "311", "310"):
+        if la:
+            yield os.path.join(la, "Programs", "Python", "Python" + ver, "python.exe")
+        yield "C:\\Python" + ver + "\\python.exe"
+    for name in ("python", "python3"):
+        w = shutil.which(name)
+        if w:
+            yield w
+
+
+def reexec_if_needed():
+    """当前解释器没装库时，就地换成装了的那个。
+
+    为什么需要：宿主起桥时执行的是 `python`（PATH 里第一个），而它不一定装了
+    edge_tts —— 本机托管 3.13 就没装，桥一起来就 "No module named 'edge_tts'"，
+    咕嘎只能退回系统引擎。launch.py 会用 GUGUA_VOICE_PYTHON 指定解释器，
+    这里再兜一层：不管谁拉起它，只要换得到能用的解释器，就自己换过去。
+    """
+    if _has_deps():
+        return False
+    if os.environ.get("GUGA_VOICE_REEXEC") == "1":
+        return False                      # 防无限重入
+    me = os.path.abspath(__file__)
+    for exe in _better_pythons():
+        try:
+            if not os.path.isfile(exe):
+                continue
+            if os.path.abspath(exe).lower() == os.path.abspath(sys.executable).lower():
+                continue
+            r = subprocess.run([exe, "-c", "import edge_tts, miniaudio"],
+                               capture_output=True, timeout=25)
+            if r.returncode != 0:
+                continue
+        except Exception:
+            continue
+        env = dict(os.environ)
+        env["GUGA_VOICE_REEXEC"] = "1"
+        try:
+            sys.stderr.write("[guga-voice-bridge] re-exec -> %s\n" % exe)
+            sys.stderr.flush()
+            os.execve(exe, [exe, me, *sys.argv[1:]], env)
+        except Exception:
+            continue
+    return False
 
 
 def _load_asr():  # pragma: no cover - 兼容旧名
@@ -87,6 +149,12 @@ def _cache_put(key, value):
         pass
 
 
+def _is_loopback(url):
+    """是不是指向本机的代理。"""
+    u = (url or "").lower()
+    return ("127.0.0.1" in u) or ("localhost" in u) or ("[::1]" in u)
+
+
 def system_proxy():
     """读 Windows 的系统代理（HKCU Internet Settings）。
 
@@ -94,10 +162,21 @@ def system_proxy():
     IPv4 直连会被重置（TLS handshake 阶段 connection reset）；系统里已经
     配好的本地代理能一路通到 HTTP 层。桥优先用 EDGE_TTS_PROXY 环境变量，
     没配就自动读系统代理；都没有就直连（在能直连的网络里同样工作）。
+
+    ⚠️ 但**本机回环地址上的代理要跳过**：开发/沙箱环境常把 HTTPS_PROXY 指向
+    127.0.0.1 上的一个临时代理，它会把到 bing 的连接掐断
+    （实测 `Server disconnected` / `Cannot connect to host`）。那种代理是
+    环境残留，不是用户配的；用户真配的代理（如 Clash 的 127.0.0.1:7890）
+    会写在注册表里，下面那段照样读得到。EDGE_TTS_PROXY 是这个变量的显式
+    指定，无条件尊重。
     """
-    env = os.environ.get("EDGE_TTS_PROXY") or os.environ.get("HTTPS_PROXY")         or os.environ.get("https_proxy")
+    env = os.environ.get("EDGE_TTS_PROXY")
     if env:
         return env
+    for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        v = os.environ.get(k)
+        if v and not _is_loopback(v):
+            return v
     try:
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
@@ -146,13 +225,29 @@ def synth(text, voice, rate, pitch, use_cache=True):
             raw = base64.b64decode(hit["samples_b64"])
             return raw, hit["sample_rate"], True
 
+    # 网络这条路：**先直连，失败再走代理**。
+    # 本机实测：直连最稳；127.0.0.1 上的沙箱代理会把连接掐断、系统注册表里
+    # 那个代理对 bing 的 WebSocket 直接回 403。反过来（有些网络里 IPv4 直连
+    # 在 TLS 阶段被重置）就轮到代理救命 —— 所以两条都留着，谁行谁上。
+    # 注意：原来只在"返回空音频"时才退到直连，而握手失败是**抛异常**，
+    # 根本没机会退 —— 于是咕嘎永远退回系统引擎。这里把异常也当失败处理。
     proxy = system_proxy()
-    mp3 = asyncio.run(asyncio.wait_for(_synth_mp3(text, voice, rate, pitch, proxy), timeout=25))
-    if not mp3 and proxy:
-        # 代理挂了就直连再试一次（网络环境换过的情况）
-        mp3 = asyncio.run(asyncio.wait_for(_synth_mp3(text, voice, rate, pitch, None), timeout=25))
+    attempts = [None] + ([proxy] if proxy else [])
+    mp3 = b""
+    why = "edge-tts 没有可用通路"
+    for p in attempts:
+        tag = f"代理 {p}" if p else "直连"
+        try:
+            chunk = asyncio.run(asyncio.wait_for(
+                _synth_mp3(text, voice, rate, pitch, p), timeout=25))
+            if chunk:
+                mp3 = chunk
+                break
+            why = f"{tag}返回空音频"
+        except Exception as e:                       # noqa: BLE001
+            why = f"{tag}失败：{type(e).__name__}: {str(e)[:120]}"
     if not mp3:
-        raise RuntimeError("edge-tts 返回空音频")
+        raise RuntimeError(why)
     samples, sr = _mp3_to_pcm(mp3)
     if not samples:
         raise RuntimeError("解码后没有采样")
@@ -209,6 +304,8 @@ def serve():
 
 
 def main():
+    # 先确保手上有能用的解释器（换掉了就不会返回）。
+    reexec_if_needed()
     ap = argparse.ArgumentParser()
     ap.add_argument("--serve", action="store_true", help="常驻：逐行 JSON 请求/响应")
     ap.add_argument("--probe", action="store_true", help="探测：合成一句短音并回报")
