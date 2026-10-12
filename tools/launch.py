@@ -27,6 +27,11 @@ BUNDLE = REPO / "my-entry" / "morning-brief" / "bundle"
 # 可能需要启动的本地转发服务（当钥匙需要特殊头时）
 SHIM = Path(r"C:\rustbuild\tmp\llm-shim.py")
 SHIM_PORT = 8791
+
+# 咕嘎的软萌音桥：桌面版桌宠用 edge-tts 的 zh-CN-XiaoyiNeural，
+# 宿主自带的 Windows 引擎里没有这个音色（本机最像人的是 Huihui，成熟女声）。
+# 有桥，卡片里的咕嘎说话就和桌面版一个声音；没有就退系统引擎，不影响其它功能。
+VOICE_BRIDGE = REPO / "tools" / "edge_tts_bridge.py"
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -175,6 +180,13 @@ def main():
     extra, note = model_env()
     env.update(extra)
     say(f"  AI 通路  {note}")
+
+    # 咕嘎的嗓子：桥在就给宿主指路（edge-tts 直连偶发被重置，桥自己读系统代理）
+    if VOICE_BRIDGE.is_file():
+        env["GUGUA_VOICE_BRIDGE"] = str(VOICE_BRIDGE)
+        say("  咕嘎嗓子  edge-tts 软萌音（与桌面版桌宠同款）")
+    else:
+        say("  咕嘎嗓子  未找到 tools/edge_tts_bridge.py，用系统语音引擎")
     say("")
 
     app_data = Path(os.environ.get("TEMP", ".")) / "morning-brief-state"

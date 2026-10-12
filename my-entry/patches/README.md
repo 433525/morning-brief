@@ -1,92 +1,115 @@
-# patches —— 官方仓库的本地改动（语音能力靠它）
+# patches —— 对官方仓库的改动，以及我们对上游的回报
 
-## 这是什么
+本目录有三类东西，别混着看：
 
-`morning-brief` 跑在官方的 **OctoSense App Hub `card-host`** 上。本轮给主编加了语音能力，
-但它**不是卡片里几行代码能做到的**：麦克风和扬声器属于宿主，卡片只能通过宿主服务请求。
+| 文件 | 是什么 | 现在的状态 |
+| --- | --- | --- |
+| `host-services.patch` | 给官方 `OctoSense-App-Hub` 加的**两个宿主服务**（`llm` = 模型 + 语音，`model` = 文本补全），含 `voice/edge.rs`：咕嘎的 edge-tts 软萌音桥 | **本轮 canonical**，已在 `a15580c` 上验证可干净应用 |
+| `host-image-minimax.patch` | 给官方 `makepad` 改的**生图后端**（`sys.photo` 走 MiniMax，回落 pollinations） | **本轮 canonical**，已在本机 `db4691d` 上验证可干净应用 |
+| `host-voice.patch` / `host-voice-card-host.patch` | 初赛那一轮提交的语音补丁 | **历史存档**：它的 `llm-service` 内容已被 `host-services.patch` 完整吸收；它对更早的上游 HEAD，**今天已经不能直接 `git apply`** |
+| `UPSTREAM-net-headers.md` | 报给上游的缺陷：`net.http_request` 拒绝保留头却不说明是哪个头 | 已定稿 |
+| `UPSTREAM-regex-p.md` | 报给上游的缺陷：`regex()` 不支持 `\p{...}`，且失败方式是「静默吞掉调用方」 | 已定稿 |
 
-所以本轮改了官方仓库 `OctoSense-App-Hub` 的两处，补成 `host-voice.patch`：
+## 为什么会有 `host-services.patch`
+
+`morning-brief` 跑在官方的 **reference `card-host`** 上。本轮它要用两样东西，
+而 reference `card-host` **两样都不提供**（它注册的服务是空的）：
+
+| 能力 | 卡片怎么用 | 谁提供 |
+| --- | --- | --- |
+| `model` | `host.request("model.complete", …)` 取一段结构化答复 | `crates/model-service` |
+| `llm` | `llm.speech` / `speak` / `listening`（朗读晨报、听主编说话） | `crates/llm-service` |
+
+官方 `HOST-SERVICES.md` L22 把话讲得很清楚：
+
+> a store app that needs something else needs **a new service in the shells, not a workaround in the bundle**
+
+**换成"补丁给宿主加服务"，正是官方指定的做法。** 所以这两个 crate 是**上游生态贡献**，
+不是卡片里的绕路。
+
+补丁做了这些事（12 个文件，13 个 hunk）：
 
 | 文件 | 改了什么 |
 | --- | --- |
-| `crates/llm-service/src/voice.rs` | 新增：`llm.speech` / `speak` / `speaking`（TTS + 能力探测）；本轮加了 `pick_voice()`——**没指定音色时自动挑最自然的那个** |
-| `crates/llm-service/src/voice/stt.rs` | 新增：`llm.listen_start` / `listen_poll` / `listen_stop`（麦克风会话） |
-| `crates/llm-service/src/voice/player.rs` | 新增：PCM 队列（服务渲染，宿主播放） |
-| `crates/llm-service/src/lib.rs` | 注册上面 6 个方法 |
-| `crates/llm-service/Cargo.toml` | 依赖 `makepad-system-speech`（官方自带，不下模型） |
-| `crates/card-host/src/host.rs` | 安装 `cx.audio_output` 播放队列里的 PCM；接 `Event::AudioDevices` |
-| `Cargo.toml` / `Cargo.lock` | 把 `crates/llm-service` 加进 workspace |
+| `Cargo.toml` | 把 `crates/llm-service`、`crates/model-service` 加进 workspace |
+| `crates/card-host/Cargo.toml` | 加上两个 crate 的 path 依赖 |
+| `crates/card-host/src/host.rs` | `register_host_services()` + `install_audio_output()`；挂载时注册、收 `Event::AudioDevices` |
+| `crates/llm-service/**` | 新增：`llm.speech` / `speak` / `speaking` / `listen_start` / `listen_poll` / `listen_stop`；音色优选；PCM 队列 |
+| `crates/model-service/**` | 新增：`model.complete`（只认 5 个键，回复固定形状；`<think>` 草稿剥离） |
 
-## 音色：为什么默认不再用引擎的「那个老声音」
+### 一个刻意的设计：卡片**不声明** `llm`
 
-系统音色之间的差别很大：Windows 老的 SAPI 音色平得像念说明书，新系统的 `Natural` /
-`Neural` 音色自然得多，而 `edge-tts` 那类云端神经音色（`zh-CN-XiaoxiaoNeural`、
-`zh-CN-YunxiNeural`、`zh-CN-YunyangNeural`）基本就是「人在念新闻」的听感。
+卡片对语音是**全降级**的：宿主没有这些方法时，`llm.speech` 请求失败，
+卡片自动隐藏语音按钮、显示「这台机器没有可用的语音能力，全程打字也算数」，
+其余功能（生成、编辑部、头版、阅读页、画像、档案、核验台）一律照常。
 
-所以 `speak` 的行为改成：**卡片指定 `voice` 就用它；没指定就按一张优先级表挑这台机器上
-最自然的那个中文音色**，而不是把 `TtsOptions::default()` 交给引擎碰运气（引擎的默认
-往往就是它最老的那个音色）。
+所以 `manifest.json` 的 `capabilities` **只有 `storage / net / images / model`**。
+理由写在 `HOST-SERVICES.md` 里：商店宿主上语音服务不存在，
+声明了反而会被门拒绝 —— 不声明、能用到就用，才是这份能力表的本意。
 
-优先级表（`voice.rs` 的 `PREFERRED`，按子串匹配，所以同一张表同时覆盖 SAPI、
-OneCore 与 edge-tts 的命名）：
-
-```
-Natural → Neural → Xiaoxiao → Yunyang → Yunxi → Huihui → Yaoyao
-```
-
-配套的工具在本仓库 `tools/voice-edge-tts.py`：
+## 怎么用
 
 ```bash
-python tools/voice-edge-tts.py --list        # 列出这台机器能拿到的中文音色（按像人程度排序）
-python tools/voice-edge-tts.py --sample      # 用首选音色念一句晨报稿子，落成 mp3 试听
-python tools/voice-edge-tts.py --voice zh-CN-YunxiNeural --text "今天的晨报好了。" --out build/a.mp3
+# 1) 宿主服务（两个 crate + card-host 接线）
+cd <你的 OctoSense-App-Hub>          # 本补丁基于 a15580c
+git apply <本仓库>/my-entry/patches/host-services.patch
+cargo build --release -p octosense-card-host
+#   补丁不含 Cargo.lock：第一次 build 会自己把新 crate 的依赖解出来。
+
+# 2) 生图后端（可选；不打则退回 pollinations）
+cd <你的 makepad>                    # 本补丁基于 db4691d
+git apply <本仓库>/my-entry/patches/host-image-minimax.patch
 ```
 
-改完补丁记得跑一次自检（会按 unified diff 的规则逐 hunk 数 +/- 行并对账，`--fix` 可
-直接修正头部计数）：
-
-```bash
-python .tools/check_patch.py my-entry/patches/host-voice.patch
-```
-
-> 说明：`llm-service` 这个 crate 本身也是本机新增的（官方仓库里还没有），
-> patch 会**整个 crate 一起创建**，所以队友拿到的是完整的 `llm` 服务（LLM + 语音）。
-
-## 怎么用（在官方仓库里打补丁）
-
-```bash
-cd <你的 OctoSense-App-Hub>
-git apply <本仓库>/my-entry/patches/host-voice.patch
-```
-
-然后重建 card-host：
+⚠️ **重建前必须先停掉正在运行的 card-host**（否则 Windows 会拒绝覆盖 exe：`拒绝访问。(os error 5)`）。
 
 ```powershell
 $env:CARGO_TARGET_DIR='C:\rustbuild\octosense-hub'   # 用纯 ASCII 路径！中文路径会 dlltool 失败
 $env:TEMP='C:\rustbuild\tmp'; $env:TMP='C:\rustbuild\tmp'
 $env:PATH = 'C:\cargo-home\bin;' + (Resolve-Path 'tools-rust\mingw64\bin').Path + ';' + $env:PATH
 cd OctoSense-App-Hub
-cargo build --release -p octosense-card-host
+cargo build --release -p octosense-card-host --bin card-host
 ```
 
-⚠️ **重建前必须先停掉正在运行的 card-host**（否则 Windows 会拒绝覆盖 exe：`拒绝访问。(os error 5)`）。
+### 补丁怎么自检
 
-## 用不到语音也可以不打
-
-卡片对语音是**全降级设计**：宿主没有这些方法时，`llm.speech` 请求失败，
-卡片会自动隐藏语音按钮、显示「这台机器没有可用的语音能力，全程打字也算数」，
-其余功能（生成、编辑部、头版、阅读页、画像、档案）全部照常。
-
-## 系统前提（Windows）
-
-- TTS：系统自带（本机实测有 Huihui / Yaoyao / Kangkang 三个中文声音），无需安装
-- STT：`Windows.Media.SpeechRecognition`。**首次使用需要在系统里打开一次「在线语音识别」**，
-  否则会报 `permission denied`。本机通过注册表打开（用户级、可逆）：
-
-```powershell
-New-Item -Path 'HKCU:\SOFTWARE\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy' -Force | Out-Null
-New-ItemProperty -Path 'HKCU:\SOFTWARE\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy' `
-  -Name HasAccepted -PropertyType DWord -Value 1 -Force | Out-Null
+```bash
+# 逐 hunk 数 +/- 行并对账（--fix 可直接修正头部计数）
+python .tools/check_patch.py my-entry/patches/host-services.patch
+python .tools/check_patch.py my-entry/patches/host-image-minimax.patch
 ```
 
-或者：设置 → 隐私和安全性 → 语音 → 打开「在线语音识别」。
+本轮两个补丁都用**临时 worktree + `git apply --check`** 真验过：
+
+```bash
+git clone <OctoSense-App-Hub> /tmp/hub-check && cd /tmp/hub-check
+git config core.autocrlf false && git rm --cached -rq . && git reset --hard -q   # 切成 LF 工作树
+git apply --check <本仓库>/my-entry/patches/host-services.patch                 # → 干净通过
+```
+
+> 为什么要多那一步行尾处理：这个仓库在 Windows 上默认按 CRLF 检出，
+> 而补丁是 LF 的。`git status` 会说「干净」（因为 git 内部做了归一），
+> 但 `git apply` 是逐字节比对的 —— 于是会报一堆 `patch does not apply`。
+> 这不是补丁坏了，是工作树的行尾不是仓库里的行尾。
+
+## MiniMax 生图后端做了什么
+
+`makepad/widgets/src/splash.rs` 里 `sys.photo(q)` 原来硬编码
+`https://image.pollinations.ai/prompt/{enc}?…&model=flux`。两个问题：
+
+1. **`model=flux` 已经下线**——现在 `GET image.pollinations.ai/models` 只剩 `sana`，
+   这是「生图太拉」的真凶；
+2. 应用侧改不动后端（`makepad/` 不在应用仓库里）。
+
+补丁的做法：`sys.photo` 先看环境变量 `MINIMAX_API_KEY`。
+
+* 有 key → 后台线程打 `POST https://api.minimaxi.com/v1/image_generation`，
+  **返回的是公开 https 的阿里云 OSS 带签名地址**，交给卡片显示；
+  第一次调用返回空串（还在画），之后命中缓存就返回地址 —— 卡片侧轮询取图。
+* 没有 key → 一行不改，照旧退回落 pollinations。
+
+这样做的关键理由：**应用在结构上无法持有密钥**（受管控 isolate 里密码框是 inert 的，
+用户没法输入；`host.request` 只能调宿主已注册的服务）。
+key 只在宿主进程的环境变量里、只在调用那一刻用掉一次，**不必进包、也不必进仓库**。
+
+没打这个补丁的机器上，`MINIMAX_API_KEY` 设了也没用，生图依旧走 pollinations —— 不会坏。
