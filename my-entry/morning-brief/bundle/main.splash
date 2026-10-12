@@ -5665,8 +5665,8 @@ HostedView{width: Fill height: Fill
                         }
                         View{width: Fill height: Fill flow: Down padding: Inset{left: 22 right: 22 top: 20 bottom: 0}
                             View{width: Fill height: Fit flow: Right align: Align{y: 0.0} spacing: 10
-                                View{width: Fill height: Fit flow: Down
-                                    Label{text: "晨报卡" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: sky_title_size()}}
+                                View{width: Fill height: Fit flow: Down spacing: 2
+                                    Label{text: "晨报卡" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: sky_title_size() + 8}}
                                 }
                                 View{width: Fit height: Fit flow: Down spacing: 3 align: Align{x: 1.0}
                                     Label{text: sky_issue() draw_text.color: gold draw_text.text_style: theme.font_code{font_size: 11}}
@@ -5678,6 +5678,11 @@ HostedView{width: Fill height: Fill
                             if sky_h > 180.0 {
                                 Label{width: Fill margin: Inset{top: 6} text: "每天一份可以核验的科技晨报" draw_text.color: secondary draw_text.text_style.font_size: 12}
                             }
+                            // 报纸式双细线：刊名与内容之间的一道「版线」
+                            View{width: Fill height: Fit flow: Down spacing: 2 margin: Inset{top: 8}
+                                SolidView{width: Fill height: 2 draw_bg.color: gold}
+                                SolidView{width: Fill height: 1 draw_bg.color: hair}
+                            }
                             View{width: Fill height: Fill}
                             if sky_h > 124.0 {
                                 View{width: Fill height: Fit flow: Right align: Align{y: 0.5} spacing: 8 padding: Inset{bottom: sky_h * 0.2 + 9.0}
@@ -5685,7 +5690,7 @@ HostedView{width: Fill height: Fill
                                         draw_bg +: {pixel: fn(){
                                             let sz = self.rect_size
                                             let d = length(self.pos * sz - sz * 0.5)
-                                            let k = 0.55 + 0.45 * sin(self.draw_pass.time * 3.2)
+                                            let k = 0.55 + 0.45 * sin(floor(self.draw_pass.time * 2.0) * 3.2)
                                             let a = (1.0 - smoothstep(2.4, 3.4, d)) + (1.0 - smoothstep(0.0, 4.0, d)) * 0.35 * k
                                             let c = #xffc65c
                                             return vec4(c.x * a, c.y * a, c.z * a, a)
@@ -5702,7 +5707,7 @@ HostedView{width: Fill height: Fill
             View{width: Fill height: Fill flow: Overlay
                 browse := ScrollYView{width: Fill height: Fill flow: Down spacing: 12 padding: Inset{left: 20 right: 20 top: 10 bottom: 220}
                     View{width: Fill height: Fit flow: Down spacing: 6 padding: Inset{bottom: 4}
-                        home_title := Label{width: Fill text: "今天想读什么？" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 22}}
+                        home_title := Label{width: Fill text: "今天想读什么？" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 26}}
                         intent_line := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 12}
                     }
                     setup_box := View{width: Fill height: Fit flow: Down spacing: 12
