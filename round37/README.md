@@ -52,3 +52,14 @@ python tools/round37_fix4.py → fix5.py  # 自检提示做成底部胶囊
   想要「有真实数据」的演示截图，需要重做 fixture。
 - 真实出报链路（联网 + 模型）还没在本机跑通一遍，情报池/复盘/立场三个页面在有数据时的
   排版还需要一次真机走查。
+
+## 五、两条容易踩的坑
+
+- **摘要陷阱**：本地 `card-host --stamp`（也就是 `.dev/dev.sh run`）会把 manifest 里的
+  `bundle_blake3` 改回 **Windows 版**。本地 `hub check` 因此会在「提交前」报 REFUSED —— 这是
+  已知的上游缺陷（issue #75，修复 PR #79 未合并），不是本轮改坏了。规则：**每次本地跑完测试，
+  提交前都要再跑一次 `python tools/portable_digest.py`**，让 manifest 回到 Linux/跨平台摘要，
+  再用带补丁的 hub 复验。
+- **不要跑 `hub stamp`**（Windows 版），它同样会把摘要写回 Windows 版。
+
+本轮提交：`65ab400`（分支 `redesign/awwwards-ui`，未推送）。
