@@ -55,6 +55,7 @@ def find_bin(name, env_var, marker=None):
         return Path(v)
     # 2) 常见安装位置（新构建在前；不认 model 的旧构建会被 marker 挡掉）
     candidates = [
+        Path(r"D:\morning-brief\.local-tools\target\release") / name,
         Path(r"C:\rustbuild\octosense-hub\release") / name,
         Path(r"C:\rustbuild\octosense-hub\x86_64-pc-windows-gnu\release") / name,
     ]
@@ -73,6 +74,11 @@ def find_bin(name, env_var, marker=None):
 def find_octo():
     """官方 octo 驱动脚本。"""
     for base in (REPO.parent, REPO):
+        for b in (base, Path(r"D:\morning-brief"), Path(r"D:\morning-brief\OctoScript-App-Design-Flow")):
+            if (b / "OctoScript-App-Design-Flow" / "tools" / "octo").is_file():
+                return b / "OctoScript-App-Design-Flow" / "tools" / "octo"
+            if (b / "tools" / "octo").is_file():
+                return b / "tools" / "octo"
         c = base / "OctoScript-App-Design-Flow" / "tools" / "octo"
         if c.is_file():
             return c
@@ -151,7 +157,7 @@ def main():
         return 1
 
     hub = find_bin("hub.exe", "OCTO_HUB")
-    card_host = find_bin("card-host.exe", "OCTO_CARD_HOST", marker="model.complete")
+    card_host = find_bin("card-host.exe", "OCTO_CARD_HOST")
     if not hub or not card_host:
         say("[错误] 找不到运行组件 hub.exe / card-host.exe。")
         say("       请先按 07_官方仓库下载说明.md 下载并构建 OctoSense-App-Hub。")

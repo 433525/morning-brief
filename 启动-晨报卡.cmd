@@ -1,38 +1,54 @@
 @echo off
-rem ============================================================
-rem   Morning Brief (chen bao ka) - clear local launcher
-rem
-rem   Double-click me. I locate Python, then hand over to the
-rem   project's own validated launcher:  tools\launch.py
-rem
-rem   WHY DELEGATE: tools\launch.py is the single source of truth.
-rem   It picks the NEW card-host build (the one that knows the
-rem   "model" capability), wires up the AI path, and prints usage.
-rem   Launching card-host directly with a hand-written path is how
-rem   the card used to end up refused and blank.
-rem
-rem   Optional: pass a port, e.g.   启动-晨报卡.cmd --port 8170
-rem ============================================================
 chcp 65001 >nul
-title Morning Brief Launcher
+title 晨报卡（改版 UI）
 setlocal
 
-set "PY=%USERPROFILE%\.workbuddy\binaries\python\versions\3.13.12\python.exe"
-if not exist "%PY%" set "PY=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-if not exist "%PY%" set "PY=python"
+set "ROOT=%~dp0"
+set "BUNDLE=%ROOT%my-entry\morning-brief\bundle"
+set "OCTO_DRIVER=D:\morning-brief\OctoScript-App-Design-Flow\tools\octo"
+set "OCTO_HUB=D:\morning-brief\.local-tools\target\release\hub.exe"
+set "OCTO_CARD_HOST=D:\morning-brief\.local-tools\target\release\card-host.exe"
+set "OCTOSENSE_APP_HUB=D:\morning-brief\OctoSense-App-Hub"
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
 
-echo.
-echo   Morning Brief launcher  -^>  tools\launch.py %*
-echo.
-
-"%PY%" "%~dp0tools\launch.py" %*
-set "RC=%ERRORLEVEL%"
-
-echo.
-if not "%RC%"=="0" (
-  echo   [launcher stopped with code %RC%] - please read the messages above.
+if not exist "%BUNDLE%" (
+  echo 找不到改版 UI bundle：%BUNDLE%
   pause
+  exit /b 1
+)
+if not exist "%OCTO_DRIVER%" (
+  echo 找不到 Octo 启动驱动：%OCTO_DRIVER%
+  pause
+  exit /b 1
+)
+if not exist "%OCTO_HUB%" (
+  echo 找不到 hub.exe：%OCTO_HUB%
+  pause
+  exit /b 1
+)
+if not exist "%OCTO_CARD_HOST%" (
+  echo 找不到 card-host.exe：%OCTO_CARD_HOST%
+  pause
+  exit /b 1
 )
 
-endlocal
-exit /b %RC%
+powershell -NoProfile -Command "$p=Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'card-host.exe' -and $_.CommandLine -like ('*' + $env:BUNDLE + '*') } | Select-Object -First 1; if ($p) { $w=New-Object -ComObject WScript.Shell; if ($w.AppActivate([int]$p.ProcessId)) { exit 0 } }; exit 1" >nul 2>&1
+if not errorlevel 1 exit /b 0
+
+where python >nul 2>&1
+if errorlevel 1 (
+  echo 找不到 Python，请确认 Python 已安装并加入 PATH。
+  pause
+  exit /b 1
+)
+
+python -u "%OCTO_DRIVER%" run "%BUNDLE%" --port 8160 --timeout 120 --detach --app-data "%TEMP%\morning-brief-redesign-live"
+if errorlevel 1 (
+  echo.
+  echo 启动失败，请查看上方错误信息。
+  pause
+  exit /b 1
+)
+exit /b 0
+
