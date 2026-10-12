@@ -63,3 +63,21 @@ python tools/round37_fix4.py → fix5.py  # 自检提示做成底部胶囊
 - **不要跑 `hub stamp`**（Windows 版），它同样会把摘要写回 Windows 版。
 
 本轮提交：`65ab400`（分支 `redesign/awwwards-ui`，未推送）。
+
+
+## 六、看起来像「白屏」的第二种成因（本轮实测）
+
+本地**不带 `--stamp`** 直接拉 `card-host.exe` 跑改版 bundle，会看到一块**纯空窗口**：
+
+```
+[E] card-host: refused: bundle digest 3a4cee25… does not match the manifest's 9a9242c9…: app morning-brief version 0.3.1
+```
+
+原因就是第五节那条摘要陷阱的另一面：提交用的 manifest 写的是**跨平台（Linux）摘要**，
+而本机 `card-host` 按 Windows 路径算出来的摘要不一样 → 卡片被**拒收** → 窗口是空的。
+这和「用着用着白屏、只能退出重开」不是同一个毛病（被拒收的话每次重开都还是空），
+但排查时值得先看一眼宿主日志里有没有 `refused`：
+
+- 双击 `启动-晨报卡.cmd` / `python tools/launch.py`：`octo run` 会自动带 `--stamp`（见 tools/octo 第 338 行），没问题；
+- 手工拉 `card-host.exe`：记得补上 `--stamp`；
+- 提交前：再跑一次 `python tools/portable_digest.py` 把摘要还原成跨平台版。
